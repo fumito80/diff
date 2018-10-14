@@ -50,7 +50,7 @@ addListener('.form', 'submit', ev => {
       .map(R.curry(JSON.stringify)(R.__, null, 4))
       .map(R.split('\n'))
       .map(R.map(craeteLine))
-      .map(R.map($(src.result).appendChild as { (a: HTMLElement): HTMLElement }));
+      .map(result => $(src.result).append(...result));
   });
   ev.preventDefault();
   return false;
