@@ -1,16 +1,14 @@
-var uglify = require('rollup-plugin-terser').terser;
-var pkg = require('ramda/package.json');
+const uglify = require('rollup-plugin-terser').terser;
+const pkg = require('ramda/package.json');
 
-var banner = '//  Ramda v' + pkg.version + '\n'
+const banner = '//  Ramda v' + pkg.version + '\n'
   + '//  https://github.com/ramda/ramda\n'
   + '//  (c) 2013-' + new Date().getFullYear() + ' Scott Sauyet, Michael Hurley, and David Chambers\n'
-  + '//  Ramda may be freely distributed under the MIT license.\n'
-  + '//\n'
-  + '//  Modules: ' + require('./ramdaModules.json').join(', ') + '\n';
+  + '//  Ramda may be freely distributed under the MIT license.\n';
 
-var input = './node_modules/ramda/es/index.js';
+const input = './node_modules/ramda/es/index.js';
 
-var config = {
+const config = {
   input: input,
   output: {
     format: 'umd',
