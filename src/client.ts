@@ -1,9 +1,8 @@
 'use strict';
 
 import * as R from 'ramda';
-import { Maybe, $, F, setListenerOnCompleetDom } from './common/util';
-
-const addListener = setListenerOnCompleetDom();
+import { Maybe, $, F, domContentLoaded } from './common/util';
+import codeMirror from 'codemirror';
 
 const jsonParseErr = (src: string) => _ => alert(src.substring(1).toUpperCase() + 'はJSONに変換できません');
 
@@ -24,7 +23,7 @@ function addNode(f: fnCreateEl, textContent: string, className?: string) {
 }
 
 function createSpan(textContent: string, className?: string) {
-  return Object.assign(document.createElement('span'), { textContent, className }) as HTMLSpanElement;
+  return Object.assign(document.createElement('span'), { textContent, className });
 }
 
 function createText(textContent: string, className?: string) {
@@ -42,16 +41,23 @@ function craeteLine(line) {
   )(document.createElement('p'));
 }
 
-addListener('.form', 'submit', ev => {
-  sources.forEach(src => {
-    $(src.result).innerHTML = '';
-    Maybe.fromNullable(($(src.code) as HTMLTextAreaElement).value || null)
-      .map(R.tryCatch(JSON.parse, jsonParseErr(src.code)))
-      .map(R.curry(JSON.stringify)(R.__, null, 4))
-      .map(R.split('\n'))
-      .map(R.map(craeteLine))
-      .map(result => $(src.result).append(...result));
+domContentLoaded()
+  .addListener('.form', 'submit', ev => {
+    sources.forEach(src => {
+      const cm = ($(src.code).nextElementSibling as any).CodeMirror as CodeMirror.EditorFromTextArea;
+      Maybe.fromNullable(cm.getValue() || null)
+        .map(R.tryCatch(JSON.parse, jsonParseErr(src.code)))
+        .map(R.curry(JSON.stringify)(R.__, null, 4))
+        .map(result => cm.setValue(result));
+    });
+    ev.preventDefault();
+    return false;
+  })
+  .ready(_ => {
+    sources.forEach(src => {
+      const cm = codeMirror.fromTextArea($<HTMLTextAreaElement>(src.code), {
+        lineNumbers: true,
+        mode: "application/ld+json"
+      });
+    });
   });
-  ev.preventDefault();
-  return false;
-});

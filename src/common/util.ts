@@ -51,15 +51,23 @@ class Nothing extends Maybe implements IMaybe {
   public chain = (_) => this;
 }
 
-export function $(selector: string, el: Element = document as any) {
-  return el.querySelector(selector) as HTMLElement;
+export function $<T extends HTMLElement>(selector: string, el: Element = document as any) {
+  return el.querySelector(selector) as T;
 }
 
-export function setListenerOnCompleetDom() {
+export function domContentLoaded() {
   const promise = new Promise(resolve => {
     document.addEventListener('DOMContentLoaded', resolve);
   });
-  return function(selector: string, type: string, listener: EventListener) {
-    promise.then(_ => $(selector).addEventListener(type, listener));
+  const handler = {
+    "addListener": function(selector: string, type: string, listener: EventListener) {
+      promise.then(_ => $(selector).addEventListener(type, listener));
+      return handler;
+    },
+    "ready": function(f: { (a: any): any }) {
+      promise.then(f);
+      return handler;
+    }
   }
+  return handler;
 }
