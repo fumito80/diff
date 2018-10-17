@@ -28,6 +28,11 @@ gulp.task('tsc-client', _ => {
     .pipe(ts.createProject('tsconfig.json')())
     .pipe(gulp.dest('js/client'));
 });
+gulp.task('difftest', _ => {
+  return gulp.src(['./src/difftest.ts', './src/diff.ts'])
+    .pipe(ts.createProject('tsconfig.json')())
+    .pipe(gulp.dest('js/client'));
+});
 
 /**
  * webpack
