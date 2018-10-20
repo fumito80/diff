@@ -4,35 +4,51 @@ import * as rollup from 'rollup';
 import * as ts from 'gulp-typescript';
 import path from 'path';
 import fs from 'fs';
+import babel from 'gulp-babel';
 
 /**
  * tsc
  */
-gulp.task('tsc-server-common', _ => {
+gulp.task('tsc-svr-common', _ => {
   return gulp.src(['./src/common/*.ts'])
     .pipe(ts.createProject('tsconfig.json')())
     .pipe(gulp.dest('js/server/common'));
 });
-gulp.task('tsc-server', _ => {
+gulp.task('tsc-svr', _ => {
   return gulp.src(['./src/server.ts'])
     .pipe(ts.createProject('tsconfig.json')())
     .pipe(gulp.dest('js/server'));
 });
-gulp.task('tsc-client-common', _ => {
+gulp.task('tsc-cli-common', _ => {
   return gulp.src(['./src/common/*.ts'])
     .pipe(ts.createProject('tsconfig.json')())
     .pipe(gulp.dest('js/client/common'));
 });
-gulp.task('tsc-client', _ => {
+gulp.task('tsc-cli', _ => {
   return gulp.src(['./src/client.ts'])
     .pipe(ts.createProject('tsconfig.json')())
     .pipe(gulp.dest('js/client'));
+});
+gulp.task('babel-cli', function() {
+  babels('client');
+  // gulp.src('js/client/*.js')
+  //   .pipe(babel())
+  //   .pipe(gulp.dest('lib/'))
 });
 gulp.task('difftest', _ => {
   return gulp.src(['./src/difftest.ts', './src/diff.ts'])
     .pipe(ts.createProject('tsconfig.json')())
     .pipe(gulp.dest('js/client'));
 });
+
+/**
+ * babel
+ */
+function babels(name) {
+  gulp.src(`js/${name}/**/*.js`)
+    .pipe(babel())
+    .pipe(gulp.dest(`lib/${name}/`))
+}
 
 /**
  * webpack
@@ -117,10 +133,11 @@ gulp.task('ramda-build', done => {
 /**
  * build
  */
-gulp.task('default', ['tsc-client', 'tsc-client-common', 'ramda-build'], _ => {
+gulp.task('default', ['tsc-cli', 'tsc-cli-common', 'ramda-build'], done => {
+  babels('client');
   webPack('client');
 });
 
-gulp.task('svr', ['tsc-server', 'tsc-server-common', 'ramda-build'], _ => {
+gulp.task('svr', ['tsc-svr', 'tsc-svr-common', 'ramda-build'], _ => {
   webPack('server');
 });
