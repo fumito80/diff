@@ -19,19 +19,28 @@ enum DiffType {
 }
 
 type Ses = { elem: string, t: DiffType }[];
-type PathPosiPre = { "xy": { "x": number, "y": number }, "k": number };
-type PathPosi = { "x": number, "y": number };
+type PathPos = { "x": number, "y": number };
+type PathPosWithK = { "xy": PathPos, "k": number };
+type InitResult = [string | string[], string | string[], number, number, boolean];
 
-function init(a: string, b: string): [string, string, number, number, boolean] {
-  const m = a.length;
-  const n = b.length;
-  if (m >= n) {
-    return [b, a, n, m, true];
+function init(a: string | string[], b: string | string[]): InitResult {
+  function retInit(_a, _b): InitResult {
+    const [m, n] = [_a.length, _b.length];
+    if (m >= n) {
+      return [_b, _a, n, m, true];
+    }
+    return [_a, _b, m, n, false];
   }
-  return [a, b, m, n, false];
+  if (typeof a === 'string' && typeof b === 'string') {
+    return retInit(a, b);
+  }
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return retInit(a, b);
+  }
+  return retInit(String(a), String(b));
 };
 
-function recordseq(epc: PathPosi[], a: string, b: string, reverse: boolean): Ses {
+function recordseq(epc: PathPos[], a: string | string[], b: string | string[], reverse: boolean): Ses {
   function selctPath([idx, ses, px, py]) {
     if (epc[idx].y - epc[idx].x > py - px) {
       return [idx, ses, b[py], reverse ? DiffType.DELETE : DiffType.ADD, px, py + 1];
@@ -56,7 +65,7 @@ function recordseq(epc: PathPosi[], a: string, b: string, reverse: boolean): Ses
 };
 
 function snake(a, b, m, n, path, offset) {
-  return ([k, p, pp]): [number, PathPosiPre] => {
+  return ([k, p, pp]): [number, PathPosWithK] => {
     const [y1, dir] = p > pp ? [p, DiffType.DELETE] : [pp, DiffType.ADD];
     const [x, y] = recurse(
         ([x, y]) => (x < m && y < n && a[x] === b[y]),
@@ -68,15 +77,15 @@ function snake(a, b, m, n, path, offset) {
 
 export namespace Diff {
   export const { DELETE, COMMON, ADD } = DiffType;
-  export function diff(str1: string, str2: string) {
+  export function diff(str1: string | string[], str2: string | string[]) {
     const [a, b, m, n, reverse] = init(str1, str2);
     const offset = m + 1;
     const delta  = n - m;
     const size   = m + n + 3;
-    const pathpos: PathPosiPre[] = [];
+    const pathpos: PathPosWithK[] = [];
     const path = Array<{ "row": number, "fp": number }>(size).fill({ "row": -1, "fp": -1 });
 
-    function setPath([k, p]: [number, PathPosiPre]) {
+    function setPath([k, p]: [number, PathPosWithK]) {
       path[k + offset] = { "row": pathpos.length, "fp": p.xy.y };
       pathpos.push(p);
       return k;
@@ -97,7 +106,7 @@ export namespace Diff {
       }
     )(-1);
 
-    const [epc]: [PathPosi[]] = recurse(
+    const [epc]: [PathPos[]] = recurse(
       ([, r]) => r !== -1,
       ([epc, r]) => [epc.concat(pathpos[r].xy), pathpos[r].k]
     )([[], path[delta + offset].row]);

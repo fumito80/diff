@@ -25,15 +25,13 @@ gulp.task('tsc-cli-common', _ => {
     .pipe(gulp.dest('js/client/common'));
 });
 gulp.task('tsc-cli', _ => {
-  return gulp.src(['./src/client.ts'])
+  return gulp.src(['src/client.ts'])
     .pipe(ts.createProject('tsconfig.json')())
     .pipe(gulp.dest('js/client'));
 });
+
 gulp.task('babel-cli', function() {
   babels('client');
-  // gulp.src('js/client/*.js')
-  //   .pipe(babel())
-  //   .pipe(gulp.dest('lib/'))
 });
 gulp.task('difftest', _ => {
   return gulp.src(['./src/difftest.ts', './src/diff.ts'])
@@ -55,7 +53,7 @@ function babels(name) {
  */
 function webPack(name: string) {
   gulp
-    .src([`./js/${name}/*.js`])
+    .src([`./lib/${name}/*.js`])
     .pipe(webpack(require(`./webpack.${name}.js`)))
     .pipe(gulp.dest('./dist'));
 }
