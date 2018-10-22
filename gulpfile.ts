@@ -30,22 +30,22 @@ gulp.task('tsc-cli', _ => {
     .pipe(gulp.dest('js/client'));
 });
 
-gulp.task('babel-cli', function() {
-  babels('client');
-});
-gulp.task('difftest', _ => {
-  return gulp.src(['./src/difftest.ts', './src/diff.ts'])
+gulp.task('diffjs', _ => {
+  return gulp.src(['./src/diff.ts'])
     .pipe(ts.createProject('tsconfig.json')())
     .pipe(gulp.dest('js/client'));
+});
+gulp.task('babel-diffjs', ['diffjs'], function() {
+  babelDiffJs();
 });
 
 /**
  * babel
  */
-function babels(name) {
-  gulp.src(`js/${name}/**/*.js`)
+function babelDiffJs() {
+  gulp.src(`js/client/diff.js`)
     .pipe(babel())
-    .pipe(gulp.dest(`lib/${name}/`))
+    .pipe(gulp.dest(`lib/client/`))
 }
 
 /**
@@ -132,7 +132,7 @@ gulp.task('ramda-build', done => {
  * build
  */
 gulp.task('default', ['tsc-cli', 'tsc-cli-common', 'ramda-build'], done => {
-  babels('client');
+  babelDiffJs();
   webPack('client');
 });
 

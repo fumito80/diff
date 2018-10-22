@@ -46,6 +46,7 @@
   "dependencies": {
     "codemirror": "^5.40.2",
     "diff": "^3.5.0",
-    "ramda": "^0.25.0"
+    "ramda": "^0.25.0",
+    "wu-diff-js": "^0.1.6"
   }
 }

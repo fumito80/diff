@@ -1,13 +1,14 @@
 'use strict';
 
 const I = a => a;
+const tap = f => a => { f(a); return a };
 const pipe = (fn, ...fns) => (arg) => fns.reduce((acc, fn2) => fn2(acc), fn(arg));
-function recurse(comparator, fn, post = I) {
+function recurse(comparator, f, post = I) {
   function run(arg) {
     if (!comparator(arg)) {
       return post(arg);
     }
-    return run(fn(arg));
+    return run(f(arg));
   }
   return run;
 }
@@ -19,12 +20,13 @@ enum DiffType {
 }
 
 type Ses = { elem: string, t: DiffType }[];
-type PathPos = { "x": number, "y": number };
-type PathPosWithK = { "xy": PathPos, "k": number };
+type Epc = [number, number]; // x, y
+type PathPos = [ number, number, number ]; // x, y, k
+enum seq { X, Y, K };
 type InitResult = [string | string[], string | string[], number, number, boolean];
 
 function init(a: string | string[], b: string | string[]): InitResult {
-  function retInit(_a, _b): InitResult {
+  function ret(_a, _b): InitResult {
     const [m, n] = [_a.length, _b.length];
     if (m >= n) {
       return [_b, _a, n, m, true];
@@ -32,46 +34,48 @@ function init(a: string | string[], b: string | string[]): InitResult {
     return [_a, _b, m, n, false];
   }
   if (typeof a === 'string' && typeof b === 'string') {
-    return retInit(a, b);
+    return ret(a, b);
   }
   if (Array.isArray(a) && Array.isArray(b)) {
-    return retInit(a, b);
+    return ret(a, b);
   }
-  return retInit(String(a), String(b));
+  return ret(String(a), String(b));
 };
 
-function recordseq(epc: PathPos[], a: string | string[], b: string | string[], reverse: boolean): Ses {
-  function selctPath([idx, ses, px, py]) {
-    if (epc[idx].y - epc[idx].x > py - px) {
-      return [idx, ses, b[py], reverse ? DiffType.DELETE : DiffType.ADD, px, py + 1];
+function recordseq(epc: Epc[], a: string | string[], b: string | string[], reverse: boolean): Ses {
+  function selctPath(diffYX: number) {
+    return ([px, py]: [number, number]) => {
+      if (diffYX === py - px) {
+        return [a[px], DiffType.COMMON, px + 1, py + 1];
+      }
+      if (diffYX > py - px) {
+        return [b[py], reverse ? DiffType.DELETE : DiffType.ADD, px, py + 1];
+      }
+      // if (y - x < py - px)
+      return [a[px], reverse ? DiffType.ADD : DiffType.DELETE, px + 1, py];
     }
-    if (epc[idx].y - epc[idx].x < py - px) {
-      return [idx, ses, a[px], reverse ? DiffType.ADD : DiffType.DELETE, px + 1, py];
-    }
-    return [idx, ses, a[px], DiffType.COMMON, px + 1, py + 1];
   }
-  return recurse(
-    ([idx]) => idx >= 0,
-    recurse(
-      ([idx, , px, py]) => (px < epc[idx].x || py < epc[idx].y),
+  const ses: Ses = [];
+  epc.reduce(([px, py], [x, y]) => {
+    return recurse(
+      ([px, py]) => (px < x || py < y),
       pipe(
-        selctPath,
-        ([idx, ses, elem, t, px, py]) => [idx, ([] as Ses).concat(ses, { elem, t }), px, py]
-      ),
-      ([idx, ses, px, py]) => [idx - 1, ses, px, py]
-    ),
-    ([, ses]) => ses
-  )([epc.length - 1, [] as Ses, 0, 0]);
+        selctPath(y - x),
+        ([elem, t, px, py]) => [px, py, ses.push({ elem, t })]
+      )
+    )([px, py]);
+  }, [0, 0]);
+  return ses;
 };
 
 function snake(a, b, m, n, path, offset) {
-  return ([k, p, pp]): [number, PathPosWithK] => {
+  return ([k, p, pp]): [number, PathPos] => {
     const [y1, dir] = p > pp ? [p, DiffType.DELETE] : [pp, DiffType.ADD];
     const [x, y] = recurse(
         ([x, y]) => (x < m && y < n && a[x] === b[y]),
         ([x, y]) => [x + 1, y + 1]
       )([y1 - k, y1]);
-    return [k, { "xy": { x, y }, "k": path[k + dir + offset].row}];
+    return [k, [x, y, path[k + dir + offset].k]];
   }
 };
 
@@ -82,34 +86,39 @@ export namespace Diff {
     const offset = m + 1;
     const delta  = n - m;
     const size   = m + n + 3;
-    const pathpos: PathPosWithK[] = [];
-    const path = Array<{ "row": number, "fp": number }>(size).fill({ "row": -1, "fp": -1 });
+    const pathpos: PathPos[] = [];
+    const epc: Epc[] = [];
+    const path = new Array<{ "k": number, "fp": number }>(size).fill({ "k": -1, "fp": -1 });
 
-    function setPath([k, p]: [number, PathPosWithK]) {
-      path[k + offset] = { "row": pathpos.length, "fp": p.xy.y };
+    function setPath([k, p]: [number, PathPos]) {
+      path[k + offset] = { "k": pathpos.length, "fp": p[seq.Y] };
       pathpos.push(p);
-      return k;
     }
 
     recurse(
       _ => (path[delta + offset].fp !== n),
-      counter => {
+      p => {
         ([
-          [- counter      , ([k]) => k < delta  , ([k]) => [k, path[k - 1 + offset].fp + 1, path[k + 1 + offset].fp]        , k => [k + 1]],
-          [delta + counter, ([k]) => k > delta  , ([k]) => [k, path[k - 1 + offset].fp + 1, path[k + 1 + offset].fp]        , k => [k - 1]],
-          [delta          , ([k]) => k === delta, ([k]) => [k, path[delta - 1 + offset].fp + 1, path[delta + 1 + offset].fp], k => [k + 1]]
-        ] as [number, { (args: any[]): boolean }, { (args: any[]): [number, number, number] }, { (arg: number): [number] }][])
-        .map(([init, comparator, fp, nextK]) => {
-          recurse(comparator, pipe(fp, snake(a, b, m, n, path, offset), setPath, nextK))(fp([init]));
+          [- p      , ([k]) => k < delta, ([k]) => [k, path[k - 1 + offset].fp + 1, path[k + 1 + offset].fp],   1],
+          [delta + p, ([k]) => k > delta, ([k]) => [k, path[k - 1 + offset].fp + 1, path[k + 1 + offset].fp], - 1]
+        ] as [number, { (args: any[]): boolean }, { (args: any[]): [number, number, number] }, number][])
+        .forEach(([init, comparator, fp, addK]) => {
+          recurse(comparator, pipe(fp, snake(a, b, m, n, path, offset), tap(setPath), ([k]) => [k + addK]))(fp([init]));
         });
-        return counter + 1;
+        pipe(snake(a, b, m, n, path, offset), tap(setPath))
+          ([delta, path[delta - 1 + offset].fp + 1, path[delta + 1 + offset].fp]);
+        return p + 1;
       }
-    )(-1);
+    )(0);
 
-    const [epc]: [PathPos[]] = recurse(
-      ([, r]) => r !== -1,
-      ([epc, r]) => [epc.concat(pathpos[r].xy), pathpos[r].k]
-    )([[], path[delta + offset].row]);
+    recurse(
+      r => r !== -1,
+      r => {
+        const [x, y, k] = pathpos[r];
+        epc.unshift([x, y]);
+        return k;
+      }
+    )(path[delta + offset].k);
 
     return recordseq(epc, a, b, reverse);
   }
