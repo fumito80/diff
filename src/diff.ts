@@ -1,14 +1,13 @@
 'use strict';
 
-const I = a => a;
 const tap = f => a => { f(a); return a };
 const pipe = (fn, ...fns) => (arg) => fns.reduce((acc, fn2) => fn2(acc), fn(arg));
-function recurse(comparator, f, post = I) {
+function recurse(cbCondition, cbRecurse) {
   function run(arg) {
-    if (!comparator(arg)) {
-      return post(arg);
+    if (!cbCondition(arg)) {
+      return arg;
     }
-    return run(f(arg));
+    return run(cbRecurse(arg));
   }
   return run;
 }
@@ -43,7 +42,7 @@ function init(a: string | string[], b: string | string[]): InitResult {
 };
 
 function recordseq(epc: Epc[], a: string | string[], b: string | string[], reverse: boolean): Ses {
-  function selctPath(diffYX: number) {
+  function selectPath(diffYX: number) {
     return ([px, py]: [number, number]) => {
       if (diffYX === py - px) {
         return [a[px], DiffType.COMMON, px + 1, py + 1];
@@ -60,7 +59,7 @@ function recordseq(epc: Epc[], a: string | string[], b: string | string[], rever
     return recurse(
       ([px, py]) => (px < x || py < y),
       pipe(
-        selctPath(y - x),
+        selectPath(y - x),
         ([elem, t, px, py]) => [px, py, ses.push({ elem, t })]
       )
     )([px, py]);
@@ -69,13 +68,13 @@ function recordseq(epc: Epc[], a: string | string[], b: string | string[], rever
 };
 
 function snake(a, b, m, n, path, offset) {
-  return ([k, p, pp]): [number, PathPos] => {
+  return ([k, p, pp]): [number, number, number, number] => {
     const [y1, dir] = p > pp ? [p, DiffType.DELETE] : [pp, DiffType.ADD];
     const [x, y] = recurse(
         ([x, y]) => (x < m && y < n && a[x] === b[y]),
         ([x, y]) => [x + 1, y + 1]
       )([y1 - k, y1]);
-    return [k, [x, y, path[k + dir + offset].k]];
+    return [k, dir, x, y];
   }
 };
 
@@ -90,9 +89,9 @@ export namespace Diff {
     const epc: Epc[] = [];
     const path = new Array<{ "k": number, "fp": number }>(size).fill({ "k": -1, "fp": -1 });
 
-    function setPath([k, p]: [number, PathPos]) {
-      path[k + offset] = { "k": pathpos.length, "fp": p[seq.Y] };
-      pathpos.push(p);
+    function setPath([k, dir, x, y]) {
+      path[k + offset] = { "k": pathpos.length, "fp": y };
+      pathpos.push([x, y, path[k + dir + offset].k]);
     }
 
     recurse(
