@@ -1,6 +1,6 @@
 'use strict';
 
-const tap = f => a => { f(a); return a };
+const tap = f => a => { f(a); return a; };
 const pipe = (fn, ...fns) => (arg) => fns.reduce((acc, fn2) => fn2(acc), fn(arg));
 function recurse(cbCondition, cbRecurse) {
   function run(arg) {
@@ -20,8 +20,7 @@ enum DiffType {
 
 type Ses = { elem: string, t: DiffType }[];
 type Epc = [number, number]; // x, y
-type PathPos = [ number, number, number ]; // x, y, k
-enum seq { X, Y, K };
+type PathPos = [number, number, number]; // x, y, k
 type InitResult = [string | string[], string | string[], number, number, boolean];
 
 function init(a: string | string[], b: string | string[]): InitResult {
@@ -101,8 +100,8 @@ export namespace Diff {
           [- p      , ([k]) => k < delta, ([k]) => [k, path[k - 1 + offset].fp + 1, path[k + 1 + offset].fp],   1],
           [delta + p, ([k]) => k > delta, ([k]) => [k, path[k - 1 + offset].fp + 1, path[k + 1 + offset].fp], - 1]
         ] as [number, { (args: any[]): boolean }, { (args: any[]): [number, number, number] }, number][])
-        .forEach(([init, comparator, fp, addK]) => {
-          recurse(comparator, pipe(fp, snake(a, b, m, n, path, offset), tap(setPath), ([k]) => [k + addK]))(fp([init]));
+        .forEach(([init, condition, fp, addK]) => {
+          recurse(condition, pipe(fp, snake(a, b, m, n, path, offset), tap(setPath), ([k]) => [k + addK]))(fp([init]));
         });
         pipe(snake(a, b, m, n, path, offset), tap(setPath))
           ([delta, path[delta - 1 + offset].fp + 1, path[delta + 1 + offset].fp]);
