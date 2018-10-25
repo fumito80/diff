@@ -24,14 +24,18 @@ let src2 = [
   'DDD',
 ];
 
-// src1 = fs.readFileSync(path.join(__dirname, 'txt-codemirror-man1.txt')).toLocaleString();
-// src2 = fs.readFileSync(path.join(__dirname, 'txt-codemirror-man2.txt')).toLocaleString();
+src1 = 'ABCDA';
+src2 = 'BFEABD';
+
+
+src1 = fs.readFileSync(path.join(__dirname, 'txt-codemirror-man1.txt')).toLocaleString();
+src2 = fs.readFileSync(path.join(__dirname, 'txt-codemirror-man2.txt')).toLocaleString();
 
 const start = Date.now();
 console.log('start: ' + start);
 
 const ses = Diff.diff(src1 || process.argv[2], src2 || process.argv[3]);
-// console.log(ses);
+console.log(ses);
 
 for (let i = 0; i < ses.length; ++i) {
   if (ses[i].t === Diff.COMMON) {
