@@ -24,11 +24,11 @@ let src2 = [
   'DDD',
 ];
 
-src1 = 'ABCDA';
-src2 = 'BFEABD';
+src1 = 'XABCDA';
+src2 = 'XBFEABD';
 
-// src1 = fs.readFileSync(path.join(__dirname, 'txt-codemirror-man1.txt')).toLocaleString();
-// src2 = fs.readFileSync(path.join(__dirname, 'txt-codemirror-man2.txt')).toLocaleString();
+src1 = fs.readFileSync(path.join(__dirname, 'txt-codemirror-man1.txt')).toLocaleString();
+src2 = fs.readFileSync(path.join(__dirname, 'txt-codemirror-man2.txt')).toLocaleString();
 
 const start = Date.now();
 console.log('start: ' + start);
@@ -41,19 +41,17 @@ console.log('end: ' + end + ', lap: ' + (end - start));
 
 function mydiff() {
   let ses = Diff.diff(src1 || process.argv[2], src2 || process.argv[3]);
-  console.log(ses);
+  // console.log(ses);
 
-  for (let i = 0; i < ses.length; ++i) {
-    // if (ses[i].t === Diff.COMMON) {
-    //   console.log(" " + ses[i].elem);
-    // }
-    // else
-    if (ses[i].t === Diff.DELETE) {
-      console.log("-" + ses[i].elem);
-    } else if (ses[i].t === Diff.ADD) {
-      console.log("+" + ses[i].elem);
+  ses.forEach(function(part){
+    if (part.removed) {
+        console.log("-" + part.value);
+    } else if (part.added) {
+      console.log("+" + part.value);
+    } else {
+      console.log(" " + part.value);
     }
-  }
+  });
 }
 
 // const jdiff = new jDiff.UnifiedDiff(src1 || process.argv[2], src2 || process.argv[3], 1000);
@@ -102,9 +100,11 @@ function jsdiff() {
     //   part.removed ? 'red' : 'grey';
     // process.stderr.write(part.value[color]);
     if (part.removed) {
-      console.log("-" + part.value);
+        console.log("-" + part.value);
     } else if (part.added) {
       console.log("+" + part.value);
+    } else {
+      console.log(" " + part.value);
     }
   });
 }

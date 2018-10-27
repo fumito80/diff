@@ -11,111 +11,139 @@ function recurse<T>(cbCondition: { (a: T): boolean }, cbRecurse: { (a: T): T }) 
   }
   return run;
 }
-
-enum DiffType {
-  DELETE = -1,
-  COMMON =  0,
-  ADD    =  1
+function linkedListToArray<T>(head: T, parentKey: string) {
+  let next = Object.assign({}, head, { [parentKey]: head }) as T;
+  return [...{
+    *[Symbol.iterator]() {
+      while (next = next[parentKey]) yield next;
+    }
+  }];
 }
 
-type Ses = { elem: string, t: DiffType }[];
-type PathList = {
+type KList = {
+  "k": number,
+  "fp": number
+}[];
+type Path = {
   x: number,
   y: number,
-  parent: PathList
+  parent: Path
 };
 type Source = {
-  "a": string | string[],
-  "b": string | string[],
-  "m": number,
-  "n": number,
-  "flip": boolean
+  a: string | string[],
+  b: string | string[],
+  m: number,
+  n: number,
+  flip: boolean
+};
+type Ses = {
+  value: string,
+  added: boolean,
+  removed: boolean,
+  common: boolean
 };
 
-function init(_a: string | string[], _b: string | string[]): Source {
-  const [m, n] = [_a.length, _b.length];
-  function ret(a, b): Source {
+function init({ a, b }: { a: string | string[], b: string | string[] }): Source {
+  const [m, n] = [a.length, b.length];
+  function orFlip({ a, b }): Source {
     if (m >= n) {
       return { "a": b, "b": a, "m": n, "n": m, "flip": true };
     }
     return { a, b, m, n, "flip": false };
   }
-  if (typeof _a === 'string' && typeof _b === 'string') {
-    return ret(_a, _b);
+  if (typeof a === 'string' && typeof b === 'string') {
+    return orFlip({ a, b });
   }
-  if (Array.isArray(_a) && Array.isArray(_b)) {
-    return ret(_a, _b);
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return orFlip({ a, b });
   }
-  return ret(String(_a), String(_b));
+  return orFlip({ a: String(a), b: String(b) });
 };
 
-function diff2({ a, b, flip }: Source, pathList: PathList): Ses {
-  const ses: Ses = [];
-  recurse<PathList>(
-    ({ parent }) => parent != null,
-    ({ x, y, parent }) => {
-      const diffX = x - parent.x;
-      const diffY = y - parent.y
-      const sameLen = Math.min(diffX, diffY);
-
-      if (sameLen > 0) {
-        ses.unshift({ "elem": a.slice(x - sameLen, x) as string, "t": DiffType.COMMON });
-      }
-      if (diffY < diffX) {
-        ses.unshift({ "elem": a[parent.x] as string, "t": flip ? DiffType.ADD : DiffType.DELETE });
-      } else if (diffX < diffY) {
-        ses.unshift({ "elem": b[parent.y] as string, "t": flip ? DiffType.DELETE : DiffType.ADD });
-      }
-      return parent;
+function unifiedResult({ a, b, flip }: Source, head: Path) {
+  function getUndiff(x, undiffs): [Ses?] {
+    if (undiffs > 0) {
+      return [{ "value": a.slice(x - undiffs, x) as string, "common": true, "added": false, "removed": false }];
     }
-  )(pathList);
-  return ses;
+    return [];
+  }
+  function getDiff(diffs: number, { x, y }): [Ses?] {
+    if (diffs > 0) {
+      return [{ "value": a[x] as string, "added": flip, "removed": !flip, "common": false }];
+    }
+    if (diffs < 0) {
+      return [{ "value": b[y] as string, "added": !flip, "removed": flip, "common": false }];
+    }
+    return [];
+  }
+  const pathList = linkedListToArray(head, 'parent');
+  return pathList.reduceRight((acc: Ses[], { x, y, parent = { x: 0, y: 0 } }) => {
+    const diffX = x - parent.x;
+    const diffY = y - parent.y;
+    const ses = [...getDiff(diffX - diffY, parent), ...getUndiff(x, Math.min(diffX, diffY))] as [Ses, Ses?];
+    const last = acc[acc.length - 1];
+    const next = ses[0];
+    if (last && ((last.added && next.added) || (last.removed && next.removed))) {
+      return [...acc.slice(0, -1), { "value": last.value + next.value, "added": last.added, "removed": last.removed }, ...ses.slice(1)] as Ses[];
+    }
+    return [...acc, ...ses] as Ses[];
+  }, [] as Ses[]);
 }
 
-function snake({ a, b, m, n }: Source) {
-  return ([k, p, pp]): [number, number, number, number] => {
-    const [y1, dir] = p > pp ? [p, DiffType.DELETE] : [pp, DiffType.ADD];
+function Snake({ a, b, m, n }: Source) {
+  return ([k, pathList, p, pp]): [number, Path[], number, number, number] => {
+    const [y1, dir] = p > pp ? [p, -1] : [pp, 1];
     const [x, y] = recurse<[number, number]>(
         ([x, y]) => (x < m && y < n && a[x] === b[y]),
         ([x, y]) => [x + 1, y + 1]
       )([y1 - k, y1]);
-    return [k, dir, x, y];
+    return [k, pathList, dir, x, y];
   }
 };
 
 export namespace Diff {
-  export const { DELETE, COMMON, ADD } = DiffType;
-  export function diff(str1: string | string[], str2: string | string[]) {
-    const source = init(str1, str2);
+  export function diff(a: string | string[], b: string | string[]) {
+    const source = init({ a, b });
     const { m, n } = source;
     const offset = m + 1;
     const delta = n - m;
-    const size = m + n + 3;
-    const pathList: PathList[] = [];
-    const path = new Array<{ "k": number, "fp": number }>(size).fill({ "k": -1, "fp": -1 });
+    const kListMax = m + n + 3;
+    const kList: KList = new Array(kListMax).fill({ "k": -1, "fp": -1 });
+    const snake = Snake(source);
 
-    function setPath([k, dir, x, y]) {
-      path[k + offset] = { "k": pathList.length, "fp": y };
-      pathList.push({ x, y, parent: pathList[path[k + dir + offset].k] });
+    function getFP([k, pathList]): [number, Path[], number, number] {
+      return [k, pathList, kList[k - 1 + offset].fp + 1, kList[k + 1 + offset].fp];
     }
 
-    recurse<number>(
-      _ => (path[delta + offset].fp !== n),
-      p => {
-        ([
-          [- p      , ([k]) => k < delta, ([k]) => [k, path[k - 1 + offset].fp + 1, path[k + 1 + offset].fp],   1],
-          [delta + p, ([k]) => k > delta, ([k]) => [k, path[k - 1 + offset].fp + 1, path[k + 1 + offset].fp], - 1]
-        ] as [number, { (args: any[]): boolean }, { (args: any[]): [number, number, number] }, number][])
-        .forEach(([init, condition, fp, addK]) => {
-          recurse(condition, pipe(fp, snake(source), tap(setPath), ([k]) => [k + addK]))(fp([init]));
-        });
-        pipe(snake(source), tap(setPath))
-          ([delta, path[delta - 1 + offset].fp + 1, path[delta + 1 + offset].fp]);
-        return p + 1;
-      }
-    )(0);
+    function setK([k, pathList,,, y]) {
+      kList[k + offset] = { "k": pathList.length, "fp": y };
+    }
 
-    // console.log(JSON.stringify(pathList, null, 4));
-    return diff2(source, pathList[path[delta + offset].k]);
+    function setPath(addK) {
+      return ([k, pathList, dir, x, y]) => {
+        const parent = pathList[kList[k + dir + offset].k];
+        pathList.push({ x, y, parent });
+        return [k + addK, pathList];
+      }
+    }
+
+    const [,, pathList] = recurse<[number, number, Path[]]>(
+      ([fp]) => fp !== n,
+      ([, p, pathList]) => {
+        ([
+          [- p      , ([k]) => k < delta  ,   1],
+          [delta + p, ([k]) => k > delta  , - 1],
+          [delta    , ([k]) => k === delta, - 1]
+        ] as [number, { (args: any[]): boolean }, number][])
+        .forEach(([init, condition, addK]) => {
+          recurse(condition, pipe(getFP, snake, tap(setK), setPath(addK)))(getFP([init, pathList]));
+        });
+        return [kList[delta + offset].fp, p + 1, pathList];
+      }
+    )([0, 0, [] as Path[]]);
+
+    // console.log(JSON.stringify(pathList, null, 4)); // See all paths.
+    const head = pathList[kList[delta + offset].k];
+    return unifiedResult(source, head);
   }
 }

@@ -9,10 +9,9 @@
     "tsc": "tsc",
     "gulp": "gulp",
     "start": "node ./dist/server.js",
-    "svr": "ts-node ./src/server.ts",
-    "partial-build": "node ./ramdaPartialBuild"
+    "svr": "ts-node ./src/server.ts"
   },
-  "keywords": [],
+  "keywords": ["diff", "onp"],
   "author": "",
   "license": "ISC",
   "repository": {},
