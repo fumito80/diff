@@ -114,7 +114,7 @@ export function diff(a: string | string[], b: string | string[]) {
   const pathList: Path[] = [];
   const kList: KList = new Array(kListMax).fill({ "k": - 1, "fp": - 1 });
 
-  function getFP([k]): [number, number, number] {
+  function getFP(k: number): [number, number, number] {
     return [k, kList[k - 1 + offset].fp + 1, kList[k + 1 + offset].fp];
   }
 
@@ -124,17 +124,18 @@ export function diff(a: string | string[], b: string | string[]) {
     pathList.push({ x, y, parent });
   }
 
+  function main([init, condition, addK]) {
+    recurse(condition, pipe(getFP, snake, tap(setPath), ([k]) => k + addK))(init);
+  }
+
   recurse<number>(
     _ => kList[delta + offset].fp !== n,
     p => {
       ([
-        [- p      , ([k]) => k < delta  ,   1],
-        [delta + p, ([k]) => k > delta  , - 1],
-        [delta    , ([k]) => k === delta, - 1]
-      ] as [number, { (args: any[]): boolean }, number][])
-      .forEach(([init, condition, addK]) => {
-        recurse(condition, pipe(getFP, snake, tap(setPath), ([k]) => [k + addK]))(getFP([init]));
-      });
+        [- p      , k => k < delta  ,   1],
+        [delta + p, k => k > delta  , - 1],
+        [delta    , k => k === delta, - 1]
+      ] as [number, { (args: number): boolean }, number][]).forEach(main);
       return p + 1;
     }
   )(0);
