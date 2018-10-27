@@ -1,13 +1,14 @@
 'use strict';
 
-const { Diff } = require('../lib/client/diff');
+const diff = require('../lib/client/diff');
 const fs = require('fs');
 const path = require('path');
-const diff = require('wu-diff-js');
+// const diff = require('wu-diff-js');
 const ONP = require('./onp');
 const jsDiff = require('diff');
 // const jDiff = require('./jdiff');
 
+// import { diff } from '../lib/client/diff';
 console.log(diff.default);
 
 let src1 = [
@@ -40,7 +41,7 @@ let end = Date.now();
 console.log('end: ' + end + ', lap: ' + (end - start));
 
 function mydiff() {
-  let ses = Diff.diff(src1 || process.argv[2], src2 || process.argv[3]);
+  let ses = diff.diff(src1 || process.argv[2], src2 || process.argv[3]);
   // console.log(ses);
 
   ses.forEach(function(part){

@@ -4,10 +4,10 @@ const tap = f => a => { f(a); return a; };
 const pipe = (fn, ...fns) => (arg) => fns.reduce((acc, fn2) => fn2(acc), fn(arg));
 function recurse<T>(cbCondition: { (a: T): boolean }, cbRecurse: { (a: T): T }) {
   function run(arg: T): T {
-    if (!cbCondition(arg)) {
-      return arg;
+    if (cbCondition(arg)) {
+      return run(cbRecurse(arg));
     }
-    return run(cbRecurse(arg));
+    return arg;
   }
   return run;
 }
@@ -104,44 +104,42 @@ function Snake({ a, b, m, n }: Source) {
   }
 };
 
-export namespace Diff {
-  export function diff(a: string | string[], b: string | string[]) {
-    const source = init({ a, b });
-    const { m, n } = source;
-    const offset = m + 1;
-    const delta = n - m;
-    const kListMax = m + n + 3;
-    const snake = Snake(source);
-    const pathList: Path[] = [];
-    const kList: KList = new Array(kListMax).fill({ "k": - 1, "fp": - 1 });
+export function diff(a: string | string[], b: string | string[]) {
+  const source = init({ a, b });
+  const { m, n } = source;
+  const offset = m + 1;
+  const delta = n - m;
+  const kListMax = m + n + 3;
+  const snake = Snake(source);
+  const pathList: Path[] = [];
+  const kList: KList = new Array(kListMax).fill({ "k": - 1, "fp": - 1 });
 
-    function getFP([k]): [number, number, number] {
-      return [k, kList[k - 1 + offset].fp + 1, kList[k + 1 + offset].fp];
-    }
-
-    function setPath([k, dir, x, y]) {
-      kList[k + offset] = { "k": pathList.length, "fp": y };
-      const parent = pathList[kList[k + dir + offset].k];
-      pathList.push({ x, y, parent });
-    }
-
-    recurse<[number, number]>(
-      ([fp]) => fp !== n,
-      ([, p]) => {
-        ([
-          [- p      , ([k]) => k < delta  ,   1],
-          [delta + p, ([k]) => k > delta  , - 1],
-          [delta    , ([k]) => k === delta, - 1]
-        ] as [number, { (args: any[]): boolean }, number][])
-        .forEach(([init, condition, addK]) => {
-          recurse(condition, pipe(getFP, snake, tap(setPath), ([k]) => [k + addK]))(getFP([init]));
-        });
-        return [kList[delta + offset].fp, p + 1];
-      }
-    )([0, 0]);
-
-    // console.log(JSON.stringify(pathList, null, 4)); // See all paths.
-    const head = pathList[kList[delta + offset].k];
-    return unifiedResult(source, head);
+  function getFP([k]): [number, number, number] {
+    return [k, kList[k - 1 + offset].fp + 1, kList[k + 1 + offset].fp];
   }
+
+  function setPath([k, dir, x, y]) {
+    kList[k + offset] = { "k": pathList.length, "fp": y };
+    const parent = pathList[kList[k + dir + offset].k];
+    pathList.push({ x, y, parent });
+  }
+
+  recurse<[number, number]>(
+    ([fp]) => fp !== n,
+    ([, p]) => {
+      ([
+        [- p      , ([k]) => k < delta  ,   1],
+        [delta + p, ([k]) => k > delta  , - 1],
+        [delta    , ([k]) => k === delta, - 1]
+      ] as [number, { (args: any[]): boolean }, number][])
+      .forEach(([init, condition, addK]) => {
+        recurse(condition, pipe(getFP, snake, tap(setPath), ([k]) => [k + addK]))(getFP([init]));
+      });
+      return [kList[delta + offset].fp, p + 1];
+    }
+  )([0, 0]);
+
+  // console.log(JSON.stringify(pathList, null, 4)); // See all paths.
+  const head = pathList[kList[delta + offset].k];
+  return unifiedResult(source, head);
 }
