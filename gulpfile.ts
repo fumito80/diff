@@ -5,6 +5,7 @@ import * as ts from 'gulp-typescript';
 import path from 'path';
 import fs from 'fs';
 import babel from 'gulp-babel';
+import { listenerCount } from 'cluster';
 
 /**
  * tsc
@@ -31,7 +32,7 @@ gulp.task('tsc-cli', _ => {
 });
 
 gulp.task('diffjs', _ => {
-  return gulp.src(['./src/diff.ts'])
+  return gulp.src(['./src/diff.ts', './src/list.ts'])
     .pipe(ts.createProject('tsconfig.json')())
     .pipe(gulp.dest('js/client'));
 });
@@ -43,7 +44,7 @@ gulp.task('babel-diffjs', ['diffjs'], function() {
  * babel
  */
 function babelDiffJs() {
-  gulp.src(`js/client/diff.js`)
+  gulp.src(['js/client/diff.js', 'js/client/list.js'])
     .pipe(babel())
     .pipe(gulp.dest(`lib/client/`))
 }
