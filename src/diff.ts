@@ -124,9 +124,9 @@ export function diff(a: string | string[], b: string | string[]) {
     pathList.push({ x, y, parent });
   }
 
-  recurse<[number, number]>(
-    ([fp]) => fp !== n,
-    ([, p]) => {
+  recurse<number>(
+    _ => kList[delta + offset].fp !== n,
+    p => {
       ([
         [- p      , ([k]) => k < delta  ,   1],
         [delta + p, ([k]) => k > delta  , - 1],
@@ -135,9 +135,9 @@ export function diff(a: string | string[], b: string | string[]) {
       .forEach(([init, condition, addK]) => {
         recurse(condition, pipe(getFP, snake, tap(setPath), ([k]) => [k + addK]))(getFP([init]));
       });
-      return [kList[delta + offset].fp, p + 1];
+      return p + 1;
     }
-  )([0, 0]);
+  )(0);
 
   // console.log(JSON.stringify(pathList, null, 4)); // See all paths.
   const head = pathList[kList[delta + offset].k];
