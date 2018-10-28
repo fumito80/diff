@@ -28,8 +28,8 @@ let src2 = [
 src1 = 'XABCDA';
 src2 = 'XBFEABD';
 
-src1 = fs.readFileSync(path.join(__dirname, 'txt-codemirror-man1.txt')).toLocaleString();
-src2 = fs.readFileSync(path.join(__dirname, 'txt-codemirror-man2.txt')).toLocaleString();
+// src1 = fs.readFileSync(path.join(__dirname, 'txt-codemirror-man1.txt')).toLocaleString();
+// src2 = fs.readFileSync(path.join(__dirname, 'txt-codemirror-man2.txt')).toLocaleString();
 
 const start = Date.now();
 console.log('start: ' + start);

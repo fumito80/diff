@@ -92,8 +92,8 @@ function getDiffStringOND(str1, str2) {
     return diff_string;
 }
 
-const text = 'ABCDA';
-const area = 'BFEABD';
+const text = 'XABCDA';
+const area = 'XBFEABD';
 
 var diff_string = getDiffStringOND(text, area);
 // document.getElementById('diff').innerHTML = diff_string;

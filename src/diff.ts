@@ -36,7 +36,7 @@ type KList = {
 type Path = {
   x: number,
   y: number,
-  parent: Path
+  parent?: Path
 };
 
 type Ses = {
@@ -93,13 +93,17 @@ function unifiedResult({ a, b, flip }: Source, head: Path) {
   }, [] as Ses[]);
 }
 
+function onpPreSnake([k, p, pp]): [number, number, number, number] {
+  const [y, dir] = p > pp ? [p, -1] : [pp, 1];
+  return [k, dir, y - k, y];
+}
+
 function Snake({ a, b, m, n }: Source) {
-  return ([k, p, pp]): [number, number, number, number] => {
-    const [y1, dir] = p > pp ? [p, -1] : [pp, 1];
+  return ([k, dir, x1, y1]): [number, number, number, number] => {
     const [x, y] = recurse<[number, number]>(
         ([x, y]) => (x < m && y < n && a[x] === b[y]),
         ([x, y]) => [x + 1, y + 1]
-      )([y1 - k, y1]);
+      )([x1, y1]);
     return [k, dir, x, y];
   }
 };
@@ -124,23 +128,64 @@ export function diff(a: string | string[], b: string | string[]) {
     pathList.push({ x, y, parent });
   }
 
-  function main([init, condition, addK]) {
-    recurse(condition, pipe(getFP, snake, tap(setPath), ([k]) => k + addK))(init);
+  function onpMain([init, condition, addK]) {
+    recurse(condition, pipe(getFP, onpPreSnake, snake, tap(setPath), ([k]) => k + addK))(init);
   }
 
-  recurse<number>(
-    _ => kList[delta + offset].fp !== n,
-    p => {
-      ([
-        [- p      , k => k < delta  ,   1],
-        [delta + p, k => k > delta  , - 1],
-        [delta    , k => k === delta, - 1]
-      ] as [number, { (args: number): boolean }, number][]).forEach(main);
-      return p + 1;
-    }
-  )(0);
+  function onp(n: number): Path {
+    recurse<number>(
+      _ => kList[delta + offset].fp < n,
+      p => {
+        ([
+          [- p      , k => k < delta  ,   1],
+          [delta + p, k => k > delta  , - 1],
+          [delta    , k => k === delta, - 1]
+        ] as [number, { (args: number): boolean }, number][]).forEach(onpMain);
+        return p + 1;
+      }
+    )(0);
+    return pathList[kList[delta + offset].k];
+  }
 
-  // console.log(JSON.stringify(pathList, null, 4)); // See all paths.
-  const head = pathList[kList[delta + offset].k];
+  function ondInitXY(i: number): [number, number, Path] {
+    const [pathMinus, pathPlus] = [pathList[i - 1], pathList[i + 1]];
+    if (!pathMinus && !pathPlus) {
+      return [0, 0, { x: 0, y: 0 } as Path];
+    }
+    if (!pathMinus || (pathPlus && pathMinus.x < pathPlus.x)) {
+      return [pathPlus.x, pathPlus.y + 1, pathPlus];
+    }
+    return [pathMinus.x + 1, pathMinus.y, pathMinus];
+  }
+
+  function ondMain([d]: [number, Path?]): [number, Path?] {
+    const max = d <= m ? d : m - (d - m);
+    const min = d <= n ? d : n - (d - n);
+    const [maxInt, head] = recurse<[number, Path?]>(
+      ([k]) => k <= max,
+      ([k]) => {
+        const i = n + 1 + k;
+        const [x1, y1, parent] = ondInitXY(i);
+        const [,, x, y] = snake([k, 0, x1, y1]);
+        pathList[i] = ({ x, y, parent });
+        if (m <= x && n <= y) {
+          return [Number.MAX_SAFE_INTEGER, pathList[i]];
+        }
+        return [k + 2];
+      }
+    )([- min]);
+    if (head) {
+      return [maxInt, head];
+    }
+    return [d + 1];
+  }
+
+  function ond(): Path {
+    const [, head] = recurse<[number, Path?]>(([p]) => p <= m + n, ondMain)([0]);
+    return head as Path;
+  }
+
+  const head = onp(n);
+  // console.log(JSON.stringify(head, null, 4)); // See all paths.
   return unifiedResult(source, head);
 }
