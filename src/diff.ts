@@ -108,15 +108,28 @@ function Snake({ a, b, m, n }: Source) {
   }
 };
 
+function reverse({ src }: { "src": string | string[] }, destName: string, len: number = 0) {
+  const dest = { [destName]: "" };
+  const start = src.length - 1;
+  const end = len > 0 ? start - len : 0;
+  for (let i = start; i >= end; dest[destName] += src[i], i--);
+  return dest;
+}
+
 export function diff(a: string | string[], b: string | string[]) {
   const source = init({ a, b });
   const { m, n } = source;
   const offset = m + 1;
   const delta = n - m;
   const kListMax = m + n + 3;
-  const snake = Snake(source);
+  // const snake = Snake(source);
   const pathList: Path[] = [];
   const kList: KList = new Array(kListMax).fill({ "k": - 1, "fp": - 1 });
+
+  const { A } = reverse({ "src": a }, 'A');
+  const { B } = reverse({ "src": b }, 'B');
+  // console.log(B.slice(0, 20));
+  const snake = Snake({ "a": A, "b": B, m, n, flip: source.flip });
 
   function getFP(k: number): [number, number, number] {
     return [k, kList[k - 1 + offset].fp + 1, kList[k + 1 + offset].fp];
@@ -187,5 +200,5 @@ export function diff(a: string | string[], b: string | string[]) {
 
   const head = onp(n);
   // console.log(JSON.stringify(head, null, 4)); // See all paths.
-  return unifiedResult(source, head);
+  return unifiedResult({ "a": A, "b": B, m, n, flip: source.flip }, head);
 }
