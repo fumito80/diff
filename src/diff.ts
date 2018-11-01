@@ -25,6 +25,7 @@ type Source = {
   b: string | string[],
   m: number,
   n: number,
+  nb: number,
   flip: boolean
 };
 
@@ -46,13 +47,29 @@ type Ses = {
   common: boolean
 };
 
+function reverse(src: string | string[], len = Number.MAX_SAFE_INTEGER) {
+  let dest = '';
+  const start = src.length - 1;
+  const end = Math.max(src.length - len, 0);
+  for (let i = start; i >= end; dest += src[i], i--);
+  return dest;
+}
+
 function init({ a, b }: { a: string | string[], b: string | string[] }): Source {
   const [m, n] = [a.length, b.length];
+  function split(source: Source): Source {
+    // return source
+    const n = Math.ceil(source.n / 2);
+    const nb = Math.trunc(source.n / 2);
+    const a = reverse(source.a);
+    const b = reverse(source.b);
+    return { a, b, m, n: source.n, nb, flip: source.flip };
+  }
   function orFlip({ a, b }): Source {
     if (m >= n) {
-      return { "a": b, "b": a, "m": n, "n": m, "flip": true };
+      return split({ "a": b, "b": a, "m": n, "n": m, "nb": 0, "flip": true });
     }
-    return { a, b, m, n, "flip": false };
+    return split({ a, b, m, n, "nb": 0, "flip": false });
   }
   if (typeof a === 'string' && typeof b === 'string') {
     return orFlip({ a, b });
@@ -80,7 +97,7 @@ function unifiedResult({ a, b, flip }: Source, head: Path) {
     return [];
   }
   const pathList = linkedListToArray(head, 'parent');
-  return pathList.reduceRight((acc: Ses[], { x, y, parent = { x: 0, y: 0 } }) => {
+  return pathList.reduce((acc: Ses[], { x, y, parent = { x: 0, y: 0 } }) => {
     const diffX = x - parent.x;
     const diffY = y - parent.y;
     const ses = [...getDiff(diffX - diffY, parent), ...getUndiff(x, Math.min(diffX, diffY))] as [Ses, Ses?];
@@ -108,17 +125,9 @@ function Snake({ a, b, m, n }: Source) {
   }
 };
 
-function reverse({ src }: { "src": string | string[] }, destName: string, len: number = 0) {
-  const dest = { [destName]: "" };
-  const start = src.length - 1;
-  const end = len > 0 ? start - len : 0;
-  for (let i = start; i >= end; dest[destName] += src[i], i--);
-  return dest;
-}
-
 export function diff(a: string | string[], b: string | string[]) {
   const source = init({ a, b });
-  const { m, n } = source;
+  const { m, n, nb } = source;
   const offset = m + 1;
   const delta = n - m;
   const kListMax = m + n + 3;
@@ -126,10 +135,7 @@ export function diff(a: string | string[], b: string | string[]) {
   const pathList: Path[] = [];
   const kList: KList = new Array(kListMax).fill({ "k": - 1, "fp": - 1 });
 
-  const { A } = reverse({ "src": a }, 'A');
-  const { B } = reverse({ "src": b }, 'B');
-  // console.log(B.slice(0, 20));
-  const snake = Snake({ "a": A, "b": B, m, n, flip: source.flip });
+  const snake = Snake(source);
 
   function getFP(k: number): [number, number, number] {
     return [k, kList[k - 1 + offset].fp + 1, kList[k + 1 + offset].fp];
@@ -160,7 +166,7 @@ export function diff(a: string | string[], b: string | string[]) {
     return pathList[kList[delta + offset].k];
   }
 
-  function ondInitXY(i: number): [number, number, Path] {
+  function ondnextPos(i: number): [number, number, Path] {
     const [pathMinus, pathPlus] = [pathList[i - 1], pathList[i + 1]];
     if (!pathMinus && !pathPlus) {
       return [0, 0, { x: 0, y: 0 } as Path];
@@ -178,7 +184,7 @@ export function diff(a: string | string[], b: string | string[]) {
       ([k]) => k <= max,
       ([k]) => {
         const i = n + 1 + k;
-        const [x1, y1, parent] = ondInitXY(i);
+        const [x1, y1, parent] = ondnextPos(i);
         const [,, x, y] = snake([k, 0, x1, y1]);
         pathList[i] = ({ x, y, parent });
         if (m <= x && n <= y) {
@@ -199,6 +205,6 @@ export function diff(a: string | string[], b: string | string[]) {
   }
 
   const head = onp(n);
-  // console.log(JSON.stringify(head, null, 4)); // See all paths.
-  return unifiedResult({ "a": A, "b": B, m, n, flip: source.flip }, head);
+  // console.log(JSON.stringify(pathList, null, 4)); // See all paths.
+  return unifiedResult(source, head);
 }
