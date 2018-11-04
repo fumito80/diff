@@ -15,7 +15,9 @@ function linkedListToArray<T>(head: T, parentKey: string) {
   let next = Object.assign({}, head, { [parentKey]: head }) as T;
   return [...{
     *[Symbol.iterator]() {
-      while (next = next[parentKey]) yield next;
+      while (next = next[parentKey]) {
+        yield next;
+      }
     }
   }];
 }
@@ -58,7 +60,7 @@ function reverse(src: string | string[], len = Number.MAX_SAFE_INTEGER) {
 function init({ a, b }: { a: string | string[], b: string | string[] }): Source {
   const [m, n] = [a.length, b.length];
   function split(source: Source): Source {
-    // return source
+    return source
     const n = Math.ceil(source.n / 2);
     const nb = Math.trunc(source.n / 2);
     const a = reverse(source.a);
@@ -97,17 +99,43 @@ function unifiedResult({ a, b, flip }: Source, head: Path) {
     return [];
   }
   const pathList = linkedListToArray(head, 'parent');
+  return pathList.reduceRight((acc: Ses[], { x, y, parent = { x: 0, y: 0 } }) => {
+    const diffX = x - parent.x;
+    const diffY = y - parent.y;
+    const undiff = getUndiff(x, Math.min(diffX, diffY));
+    const diff = getDiff(diffX - diffY, parent);
+    const [last] = acc.slice(-1);
+    const [next] = [...diff, ...undiff] as [Ses, Ses?];
+    if (last && ((last.added && next.added) || (last.removed && next.removed))) {
+      const { added, removed } = last;
+      return [...acc.slice(0, -1), { "value": last.value + next.value, added, removed }, ...undiff] as Ses[];
+    }
+    return [...acc, ...diff, ...undiff] as Ses[];
+  }, [] as Ses[]);
   return pathList.reduce((acc: Ses[], { x, y, parent = { x: 0, y: 0 } }) => {
     const diffX = x - parent.x;
     const diffY = y - parent.y;
-    const ses = [...getDiff(diffX - diffY, parent), ...getUndiff(x, Math.min(diffX, diffY))] as [Ses, Ses?];
-    const last = acc[acc.length - 1];
-    const next = ses[0];
-    if (last && ((last.added && next.added) || (last.removed && next.removed))) {
-      return [...acc.slice(0, -1), { "value": last.value + next.value, "added": last.added, "removed": last.removed }, ...ses.slice(1)] as Ses[];
+    const undiff = getUndiff(x, Math.min(diffX, diffY));
+    const diff = getDiff(diffX - diffY, parent);
+    const [last] = acc.slice(-1);
+    const [next] = [...undiff, ...diff] as [Ses, Ses?];
+    if (last && next && ((last.added && next.added) || (last.removed && next.removed))) {
+      const { added, removed } = last;
+      return [...acc.slice(0, -1), { "value": last.value + next.value, added, removed }, ...undiff] as Ses[];
     }
-    return [...acc, ...ses] as Ses[];
+    return [...acc, ...undiff, ...diff] as Ses[];
   }, [] as Ses[]);
+  // return pathList.reduceRight((acc: Ses[], { x, y, parent = { x: 0, y: 0 } }) => {
+  //   const diffX = x - parent.x;
+  //   const diffY = y - parent.y;
+  //   const ses = [...getDiff(diffX - diffY, parent), ...getUndiff(x, Math.min(diffX, diffY))] as [Ses, Ses?];
+  //   const [last] = acc.slice(-1);
+  //   const [next] = ses;
+  //   if (last && ((last.added && next.added) || (last.removed && next.removed))) {
+  //     return [...acc.slice(0, -1), { "value": last.value + next.value, "added": last.added, "removed": last.removed }, ...ses.slice(1)] as Ses[];
+  //   }
+  //   return [...acc, ...ses] as Ses[];
+  // }, [] as Ses[]);
 }
 
 function onpPreSnake([k, p, pp]): [number, number, number, number] {
