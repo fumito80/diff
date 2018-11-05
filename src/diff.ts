@@ -1,5 +1,6 @@
 'use strict';
 
+const I = a => a;
 const tap = f => a => { f(a); return a; };
 const pipe = (fn, ...fns) => (arg) => fns.reduce((acc, fn2) => fn2(acc), fn(arg));
 function recurse<T>(cbCondition: { (a: T): boolean }, cbRecurse: { (a: T): T }) {
@@ -98,33 +99,51 @@ function unifiedResult({ a, b, flip }: Source, head: Path) {
     }
     return [];
   }
+  function unified(pathList, reduceFun, nextFun) {
+    return reduceFun.call(pathList, (acc: Ses[], { x, y, parent = { x: 0, y: 0 } }) => {
+      const diffX = x - parent.x;
+      const diffY = y - parent.y;
+      const undiff = getUndiff(x, Math.min(diffX, diffY));
+      const diff   = getDiff(diffX - diffY, parent);
+      const [last] = acc.slice(-1);
+      const [next] = nextFun(diff, undiff);
+      if (last && next && ((last.added && next.added) || (last.removed && next.removed))) {
+        const { added, removed } = last;
+        return [...acc.slice(0, -1), { "value": last.value + next.value, added, removed }, ...undiff] as Ses[];
+      }
+      return [...acc, ...nextFun(diff, undiff)] as Ses[];
+    }, [] as Ses[]);
+  }
   const pathList = linkedListToArray(head, 'parent');
-  return pathList.reduceRight((acc: Ses[], { x, y, parent = { x: 0, y: 0 } }) => {
-    const diffX = x - parent.x;
-    const diffY = y - parent.y;
-    const undiff = getUndiff(x, Math.min(diffX, diffY));
-    const diff = getDiff(diffX - diffY, parent);
-    const [last] = acc.slice(-1);
-    const [next] = [...diff, ...undiff] as [Ses, Ses?];
-    if (last && ((last.added && next.added) || (last.removed && next.removed))) {
-      const { added, removed } = last;
-      return [...acc.slice(0, -1), { "value": last.value + next.value, added, removed }, ...undiff] as Ses[];
-    }
-    return [...acc, ...diff, ...undiff] as Ses[];
-  }, [] as Ses[]);
-  return pathList.reduce((acc: Ses[], { x, y, parent = { x: 0, y: 0 } }) => {
-    const diffX = x - parent.x;
-    const diffY = y - parent.y;
-    const undiff = getUndiff(x, Math.min(diffX, diffY));
-    const diff = getDiff(diffX - diffY, parent);
-    const [last] = acc.slice(-1);
-    const [next] = [...undiff, ...diff] as [Ses, Ses?];
-    if (last && next && ((last.added && next.added) || (last.removed && next.removed))) {
-      const { added, removed } = last;
-      return [...acc.slice(0, -1), { "value": last.value + next.value, added, removed }, ...undiff] as Ses[];
-    }
-    return [...acc, ...undiff, ...diff] as Ses[];
-  }, [] as Ses[]);
+  return unified(pathList, Array.prototype.reduceRight, (diff, undiff) => [...diff, ...undiff]);
+  // return unified(pathList, Array.prototype.reduce, (diff, undiff) => [...undiff, ...diff]);
+  
+  // return pathList.reduceRight((acc: Ses[], { x, y, parent = { x: 0, y: 0 } }) => {
+  //   const diffX = x - parent.x;
+  //   const diffY = y - parent.y;
+  //   const undiff = getUndiff(x, Math.min(diffX, diffY));
+  //   const diff = getDiff(diffX - diffY, parent);
+  //   const [last] = acc.slice(-1);
+  //   const [next] = [...diff, ...undiff] as [Ses, Ses?];
+  //   if (last && ((last.added && next.added) || (last.removed && next.removed))) {
+  //     const { added, removed } = last;
+  //     return [...acc.slice(0, -1), { "value": last.value + next.value, added, removed }, ...undiff] as Ses[];
+  //   }
+  //   return [...acc, ...diff, ...undiff] as Ses[];
+  // }, [] as Ses[]);
+  // return pathList.reduce((acc: Ses[], { x, y, parent = { x: 0, y: 0 } }) => {
+  //   const diffX = x - parent.x;
+  //   const diffY = y - parent.y;
+  //   const undiff = getUndiff(x, Math.min(diffX, diffY));
+  //   const diff = getDiff(diffX - diffY, parent);
+  //   const [last] = acc.slice(-1);
+  //   const [next] = [...undiff, ...diff] as [Ses, Ses?];
+  //   if (last && next && ((last.added && next.added) || (last.removed && next.removed))) {
+  //     const { added, removed } = last;
+  //     return [...acc.slice(0, -1), { "value": last.value + next.value, added, removed }, ...undiff] as Ses[];
+  //   }
+  //   return [...acc, ...undiff, ...diff] as Ses[];
+  // }, [] as Ses[]);
   // return pathList.reduceRight((acc: Ses[], { x, y, parent = { x: 0, y: 0 } }) => {
   //   const diffX = x - parent.x;
   //   const diffY = y - parent.y;
