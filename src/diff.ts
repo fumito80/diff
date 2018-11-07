@@ -1,5 +1,9 @@
 'use strict';
 
+/**
+ * Common Function
+ */
+
 const tap = f => a => { f(a); return a; };
 const pipe = (fn, ...fns) => (arg) => fns.reduce((acc, fn2) => fn2(acc), fn(arg));
 
@@ -24,95 +28,102 @@ function linkedListToArray<T>(head: T, parentKey: string) {
   }];
 }
 
+/**
+ * Types
+ */
+
 type Source = {
-  a: string | string[],
-  b: string | string[],
-  m: number,
-  n: number,
-  nb: number,
-  flip: boolean
+  "a": string | string[],
+  "b": string | string[],
+  "m": number,
+  "n": number,
+  "na"?: number,
+  "nb"?: number,
+  "flip": boolean
 };
 
 type Path = {
-  x: number,
-  y: number,
-  parent?: Path
+  "x": number,
+  "y": number,
+  "parent"?: Path
 };
 
 type Ses = {
-  value: string,
-  added: boolean,
-  removed: boolean,
-  common: boolean
+  "value": string,
+  "added": boolean,
+  "removed": boolean,
+  "common": boolean
 };
 
-function reverse(src: string | string[], len = Number.MAX_SAFE_INTEGER) {
-  let dest = '';
-  const start = src.length - 1;
-  const end = Math.max(src.length - len, 0);
-  for (let i = start; i >= end; dest += src[i], i--);
-  return dest;
-}
+enum ElemType { added, removed, common };
 
-function init({ a, b }: { a: string | string[], b: string | string[] }): Source {
+/**
+ * Initialize
+ */
+
+function init({ a = '', b = '' }: { a: string | string[], b: string | string[] }): Source {
   const [m, n] = [a.length, b.length];
-  function split(source: Source): Source {
-    return source
-    const n = Math.ceil(source.n / 2);
-    const nb = Math.trunc(source.n / 2);
-    const a = reverse(source.a);
-    const b = reverse(source.b);
-    return { a, b, m, n: source.n, nb, flip: source.flip };
+  function split({ a, b, m, n, flip }: Source): Source {
+    const na = Math.ceil(n / 2);
+    const nb = Math.trunc(n / 2);
+    return { a, b, m, n, na, nb, flip };
   }
   function orFlip({ a, b }): Source {
     if (m >= n) {
-      return split({ "a": b, "b": a, "m": n, "n": m, "nb": 0, "flip": true });
+      return split({ "a": b, "b": a, "m": n, "n": m, "flip": true });
     }
-    return split({ a, b, m, n, "nb": 0, "flip": false });
+    return split({ a, b, m, n, "flip": false });
   }
-  if (typeof a === 'string' && typeof b === 'string') {
-    return orFlip({ a, b });
-  }
-  if (Array.isArray(a) && Array.isArray(b)) {
+  if ((typeof a === 'string' && typeof b === 'string') || (Array.isArray(a) && Array.isArray(b))) {
     return orFlip({ a, b });
   }
   return orFlip({ a: String(a), b: String(b) });
 };
 
+/**
+ * Format result
+ */
+
 function unifiedResult({ a, b, flip }: Source, head: Path) {
-  function getUndiff(x, undiffs): [Ses?] {
+  function makeElem(value: string, t: ElemType) {
+    return { value, added: t === ElemType.added, removed: t === ElemType.removed, common: t === ElemType.common };
+  }
+  function getUndiff(x, undiffs): [Ses] | never[] {
     if (undiffs > 0) {
-      return [{ "value": a.slice(x - undiffs, x) as string, "added": false, "removed": false, "common": true }];
+      return [makeElem(a.slice(x - undiffs, x) as string, ElemType.common)];
     }
     return [];
   }
-  function getDiff(diffs: number, { x, y }): [Ses?] {
+  function getDiff(diffs: number, { x, y }): [Ses] | never[] {
     if (diffs > 0) {
-      return [{ "value": a[x] as string, "added": flip, "removed": !flip, "common": false }];
+      return [makeElem(a[x], flip ? ElemType.added : ElemType.removed)];
     }
     if (diffs < 0) {
-      return [{ "value": b[y] as string, "added": !flip, "removed": flip, "common": false }];
+      return [makeElem(b[y], flip ? ElemType.removed : ElemType.added)];
     }
     return [];
   }
-  function unified(pathList, reduceFun, nextFun) {
-    return reduceFun.call(pathList, (acc: Ses[], { x, y, parent = { x: 0, y: 0 } }) => {
+  function unified(pathList) {
+    return pathList.reduceRight((acc: Ses[], { x, y, parent = { x: 0, y: 0 } }) => {
       const diffX = x - parent.x;
       const diffY = y - parent.y;
       const undiff = getUndiff(x, Math.min(diffX, diffY));
-      const diff   = getDiff(diffX - diffY, parent);
-      const [last] = acc.slice(-1);
-      const [next] = nextFun(diff, undiff);
-      if (last && next && ((last.added && next.added) || (last.removed && next.removed))) {
-        const { added, removed } = last;
-        return [...acc.slice(0, -1), { "value": last.value + next.value, added, removed }, ...undiff] as Ses[];
+      const diffOrNull = getDiff(diffX - diffY, parent);
+      const [last] = acc.slice(- 1);
+      const [diff] = diffOrNull;
+      if (diff && last && ((last.added && diff.added) || (last.removed && diff.removed))) {
+        return [...acc.slice(0, -1), Object.assign({}, last, { "value": last.value + diff.value }), ...undiff];
       }
-      return [...acc, ...nextFun(diff, undiff)] as Ses[];
-    }, [] as Ses[]);
+      return [...acc, ...diffOrNull, ...undiff];
+    }, []);
   }
   const pathList = linkedListToArray(head, 'parent');
-  return unified(pathList, Array.prototype.reduceRight, (diff, undiff) => [...diff, ...undiff]);
+  return unified(pathList);
 }
+
+/**
+ * Diff main
+ */
 
 export function diff(a: string | string[], b: string | string[]) {
   const source = init({ a, b });
@@ -149,7 +160,8 @@ export function diff(a: string | string[], b: string | string[]) {
     const [, { k }] = recurse<[number, { "k": number, "fp": number }]>(
       ([, { fp }]) => fp < n,
       ([p]) => {
-        [...rangesMinusK.slice(n - p), ...rangesPlusK.slice(m - p + delta)].map(pipe(snake, tap(setPath)));
+        const kList = [...rangesMinusK.slice(n - p), ...rangesPlusK.slice(m - p + delta)];
+        kList.map(pipe(snake, tap(setPath)));
         return [p + 1, kLogs[delta + offset]];
       }
     )([delta, { "k": - 1, "fp": - 1 }]);
