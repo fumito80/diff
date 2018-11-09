@@ -153,7 +153,7 @@ exports.Diff = function (a_, b_) {
               epc[epc.length] = new P(pathposi[r].x, pathposi[r].y, null);
               r = pathposi[r].k;
           }
-          console.log('1: ' + Date.now());
+        //   console.log('1: ' + Date.now());
 
           recordseq(epc);
       }

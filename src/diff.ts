@@ -1,10 +1,9 @@
 'use strict';
 
 /**
- * Common Function
+ * Common Functions
  */
 
-const tap = f => a => { f(a); return a; };
 const pipe = (fn, ...fns) => (arg) => fns.reduce((acc, fn2) => fn2(acc), fn(arg));
 
 function recurse<T>(cbCondition: { (a: T): boolean }, cbRecurse: { (a: T): T }) {
@@ -15,17 +14,6 @@ function recurse<T>(cbCondition: { (a: T): boolean }, cbRecurse: { (a: T): T }) 
     return arg;
   }
   return run;
-}
-
-function linkedListToArray<T>(head: T, parentKey: string) {
-  let next = Object.assign({}, head, { [parentKey]: head }) as T;
-  return [...{
-    *[Symbol.iterator]() {
-      while (next = next[parentKey]) {
-        yield next;
-      }
-    }
-  }];
 }
 
 /**
@@ -103,22 +91,23 @@ function unifiedResult({ a, b, flip }: Source, head: Path) {
     }
     return [];
   }
-  function unified(pathList) {
-    return pathList.reduceRight((acc: Ses[], { x, y, parent = { x: 0, y: 0 } }) => {
+  function getAcc([undiff, diffOrNull, [diff], [prev, ...tail], acc]: Ses[][]): Ses[] {
+    if (prev && ((prev.added && diff.added) || (prev.removed && diff.removed))) {
+      return [Object.assign({}, prev, { "value": diff.value + prev.value }), ...tail];
+    }
+    return [...diffOrNull, ...undiff, ...acc];
+  }
+  const [, result] = recurse<[Path, Ses[]]>(
+    ([{ x }]) => x > 0,
+    ([{ x, y, parent = { x: 0, y: 0 } }, acc]) => {
       const diffX = x - parent.x;
       const diffY = y - parent.y;
       const undiff = getUndiff(x, Math.min(diffX, diffY));
       const diffOrNull = getDiff(diffX - diffY, parent);
-      const [last] = acc.slice(- 1);
-      const [diff] = diffOrNull;
-      if (diff && last && ((last.added && diff.added) || (last.removed && diff.removed))) {
-        return [...acc.slice(0, -1), Object.assign({}, last, { "value": last.value + diff.value }), ...undiff];
-      }
-      return [...acc, ...diffOrNull, ...undiff];
-    }, []);
-  }
-  const pathList = linkedListToArray(head, 'parent');
-  return unified(pathList);
+      return [parent, getAcc([undiff, diffOrNull, [...undiff, ...diffOrNull], acc, acc])];
+    }
+  )([head, []]);
+  return result;
 }
 
 /**
@@ -130,16 +119,17 @@ export function diff(a: string | string[], b: string | string[]) {
   const { m, n, nb } = source;
   const offset = m + 1;
   const delta = n - m;
-  const kListMax = m + n + 3;
-  const pathList: Path[] = [];
-  const kLogs: { "k": number, "fp": number }[] = new Array(kListMax).fill({ "k": - 1, "fp": - 1 });
+  const fpMax = m + n + 3;
+  const paths: Path[] = [];
+  const fp: { "fp": number, "k": number }[] = new Array(fpMax).fill({ "fp": - 1, "k": - 1 });
+  const snake = pipe(Snake(source), setPath);
 
   const rangesMinusK = [...Array(n)].map((_, i) => - (n - i) + delta);
   const rangesPlusK  = [...Array(m + 1)].map((_, i) => m - i + delta);
 
   function Snake({ a, b, m, n }: Source) {
-    return (k: number): [number, number, number, number] => {
-      const [p, pp] = [kLogs[k - 1 + offset].fp + 1, kLogs[k + 1 + offset].fp];
+    return (k: number): number[] => {
+      const [p, pp] = [fp[k - 1 + offset].fp + 1, fp[k + 1 + offset].fp];
       const [y1, dir] = p > pp ? [p, -1] : [pp, 1];
       const [x, y] = recurse<[number, number]>(
           ([x, y]) => (x < m && y < n && a[x] === b[y]),
@@ -149,26 +139,24 @@ export function diff(a: string | string[], b: string | string[]) {
     }
   };
 
-  function setPath([k, dir, x, y]) {
-    kLogs[k + offset] = { "k": pathList.length, "fp": y };
-    const parent = pathList[kLogs[k + dir + offset].k];
-    pathList.push({ x, y, parent });
+  function setPath([k, dir, x, y]): void {
+    fp[k + offset] = { "fp": y, "k": paths.length };
+    const parent = paths[fp[k + dir + offset].k];
+    paths.push({ x, y, parent });
   }
 
   function onp(n: number): Path {
-    const snake = Snake(source);
-    const [, { k }] = recurse<[number, { "k": number, "fp": number }]>(
+    const [, { k }] = recurse<[number, { "fp": number, "k": number }]>(
       ([, { fp }]) => fp < n,
       ([p]) => {
-        const kList = [...rangesMinusK.slice(n - p), ...rangesPlusK.slice(m - p + delta)];
-        kList.map(pipe(snake, tap(setPath)));
-        return [p + 1, kLogs[delta + offset]];
+        rangesMinusK.slice(n - p).forEach(snake);
+        rangesPlusK.slice(m - p + delta).forEach(snake);
+        return [p + 1, fp[delta + offset]];
       }
-    )([delta, { "k": - 1, "fp": - 1 }]);
-    return pathList[k];
+    )([delta, { "fp": - 1, "k": - 1 }]);
+    return paths[k];
   }
 
   const head = onp(n);
-  // console.log(JSON.stringify(pathList, null, 4)); // See all paths.
   return unifiedResult(source, head);
 }

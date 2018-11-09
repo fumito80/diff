@@ -34,8 +34,8 @@ src2 = 'XBFEABDBYZ';
 // src1 = 'Determines the height of the cursor. Default is 1, meaning it spans the whole height of the line. For some fonts (and by some tastes) a smaller height (for example 0.85), which causes the cursor to not reach all the way to the bottom of the line, looks better';
 // src2 = 'Determines the height of the cursor. Default is 1, meaning it spans the whole height of the l87or some fonts (and by some tastes) a smaller height (for example 0.85), which causes the cursor to not reach all the way to the bottom of the line, looks better';
 
-// src1 = fs.readFileSync(path.join(__dirname, 'txt-codemirror-man1.txt')).toLocaleString();
-// src2 = fs.readFileSync(path.join(__dirname, 'txt-codemirror-man2.txt')).toLocaleString();
+src1 = fs.readFileSync(path.join(__dirname, 'txt-codemirror-man1.txt')).toLocaleString();
+src2 = fs.readFileSync(path.join(__dirname, 'txt-codemirror-man2.txt')).toLocaleString();
 
 const start = Date.now();
 console.log('start: ' + start);
@@ -49,6 +49,7 @@ let end = Date.now();
 console.log('end: ' + end + ', lap: ' + (end - start));
 
 function mydiff() {
+  console.log('mydiff();');
   let ses = diff.diff(src1 || process.argv[2], src2 || process.argv[3]);
   // console.log(ses);
 
@@ -67,24 +68,26 @@ function mydiff() {
 // console.log(jdiff.toString());
 
 function onp() {
+  console.log('onp();');
   const onp = new ONP.Diff(src1 || process.argv[2], src2 || process.argv[3]);
   onp.compose();
   const ses = onp.getses();
   // console.log(ses);
 
-  for (let i = 0; i < ses.length; ++i) {
-    // if (ses[i].t === Diff.COMMON) {
-    //   console.log(" " + ses[i].elem);
-    // } else
-    if (ses[i].t === onp.SES_DELETE) {
-      console.log("-" + ses[i].elem);
-    } else if (ses[i].t === onp.SES_ADD) {
-      console.log("+" + ses[i].elem);
-    }
-  }
+  // for (let i = 0; i < ses.length; ++i) {
+  //   // if (ses[i].t === Diff.COMMON) {
+  //   //   console.log(" " + ses[i].elem);
+  //   // } else
+  //   if (ses[i].t === onp.SES_DELETE) {
+  //     console.log("-" + ses[i].elem);
+  //   } else if (ses[i].t === onp.SES_ADD) {
+  //     console.log("+" + ses[i].elem);
+  //   }
+  // }
 }
 
 function wudiff() {
+  console.log('wudiff();');
   let ses = diff.default(src1 || process.argv[2], src2 || process.argv[3]);
 
   for (let i = 0; i < ses.length; ++i) {
@@ -100,6 +103,7 @@ function wudiff() {
 }
 
 function jsdiff() {
+  console.log('jsdiff();');
   let jsdiff = jsDiff.diffChars(src1 || process.argv[2], src2 || process.argv[3]);
   
   jsdiff.forEach(function(part){
