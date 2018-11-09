@@ -4,8 +4,6 @@
  * Common Functions
  */
 
-const pipe = (fn, ...fns) => (arg) => fns.reduce((acc, fn2) => fn2(acc), fn(arg));
-
 function recurse<T>(cbCondition: { (a: T): boolean }, cbRecurse: { (a: T): T }) {
   function run(arg: T): T {
     if (cbCondition(arg)) {
@@ -33,7 +31,12 @@ type Source = {
 type Path = {
   "x": number,
   "y": number,
-  "parent"?: Path
+  "r": number
+};
+
+type Fp = {
+  "fp": number,
+  "k": number
 };
 
 type Ses = {
@@ -72,7 +75,7 @@ function init({ a = '', b = '' }: { a: string | string[], b: string | string[] }
  * Format result
  */
 
-function unifiedResult({ a, b, flip }: Source, head: Path) {
+function unifiedResult({ a, b, flip }: Source, paths: Path[], k: number) {
   function makeElem(value: string, t: ElemType) {
     return { value, added: t === ElemType.added, removed: t === ElemType.removed, common: t === ElemType.common };
   }
@@ -98,16 +101,49 @@ function unifiedResult({ a, b, flip }: Source, head: Path) {
     return [...diffOrNull, ...undiff, ...acc];
   }
   const [, result] = recurse<[Path, Ses[]]>(
-    ([{ x }]) => x > 0,
-    ([{ x, y, parent = { x: 0, y: 0 } }, acc]) => {
+    ([path]) => !!path,
+    ([{ x, y, r }, acc]) => {
+      const parent = paths[r] || { x: 0, y: 0 };
       const diffX = x - parent.x;
       const diffY = y - parent.y;
       const undiff = getUndiff(x, Math.min(diffX, diffY));
       const diffOrNull = getDiff(diffX - diffY, parent);
-      return [parent, getAcc([undiff, diffOrNull, [...undiff, ...diffOrNull], acc, acc])];
+      return [paths[r], getAcc([undiff, diffOrNull, [...undiff, ...diffOrNull], acc, acc])];
     }
-  )([head, []]);
+  )([paths[k], []]);
   return result;
+}
+
+function getPaths(source, delta, offset, fpMax): [Path[], number] {
+  function Snake({ a, b, m, n }: Source) {
+    return (k: number, i: number): Path => {
+      const [p, pp] = [fp[k - 1 + offset].fp + 1, fp[k + 1 + offset].fp];
+      const [y1, dir] = p > pp ? [p, -1] : [pp, 1];
+      const [x, y] = recurse<[number, number]>(
+          ([x, y]) => (x < m && y < n && a[x] === b[y]),
+          ([x, y]) => [x + 1, y + 1]
+        )([y1 - k, y1]);
+      fp[k + offset] = { "fp": y, "k": i };
+      return { x, y, r: fp[k + dir + offset].k }
+    }
+  };
+  const fp: Fp[] = new Array(fpMax).fill({ "fp": - 1, "k": - 1 });
+  const snake = Snake(source);
+  let p = delta;
+  let i = 0;
+  return [[...{
+    *[Symbol.iterator](): IterableIterator<Path> {
+      while (fp[delta + offset].fp < source.n) {
+        for (let k = - p; k < delta; k++) {
+          yield snake(k, i++);
+        }
+        for (let k = delta + p; k >= delta; k--) {
+          yield snake(k, i++);
+        }
+        p++;
+      }
+    }
+  }], fp[delta + offset].k];
 }
 
 /**
@@ -120,43 +156,6 @@ export function diff(a: string | string[], b: string | string[]) {
   const offset = m + 1;
   const delta = n - m;
   const fpMax = m + n + 3;
-  const paths: Path[] = [];
-  const fp: { "fp": number, "k": number }[] = new Array(fpMax).fill({ "fp": - 1, "k": - 1 });
-  const snake = pipe(Snake(source), setPath);
-
-  const rangesMinusK = [...Array(n)].map((_, i) => - (n - i) + delta);
-  const rangesPlusK  = [...Array(m + 1)].map((_, i) => m - i + delta);
-
-  function Snake({ a, b, m, n }: Source) {
-    return (k: number): number[] => {
-      const [p, pp] = [fp[k - 1 + offset].fp + 1, fp[k + 1 + offset].fp];
-      const [y1, dir] = p > pp ? [p, -1] : [pp, 1];
-      const [x, y] = recurse<[number, number]>(
-          ([x, y]) => (x < m && y < n && a[x] === b[y]),
-          ([x, y]) => [x + 1, y + 1]
-        )([y1 - k, y1]);
-      return [k, dir, x, y];
-    }
-  };
-
-  function setPath([k, dir, x, y]): void {
-    fp[k + offset] = { "fp": y, "k": paths.length };
-    const parent = paths[fp[k + dir + offset].k];
-    paths.push({ x, y, parent });
-  }
-
-  function onp(n: number): Path {
-    const [, { k }] = recurse<[number, { "fp": number, "k": number }]>(
-      ([, { fp }]) => fp < n,
-      ([p]) => {
-        rangesMinusK.slice(n - p).forEach(snake);
-        rangesPlusK.slice(m - p + delta).forEach(snake);
-        return [p + 1, fp[delta + offset]];
-      }
-    )([delta, { "fp": - 1, "k": - 1 }]);
-    return paths[k];
-  }
-
-  const head = onp(n);
-  return unifiedResult(source, head);
+  const [paths, k] = getPaths(source, delta, offset, fpMax);
+  return unifiedResult(source, paths, k);
 }
