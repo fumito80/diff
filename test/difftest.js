@@ -25,8 +25,8 @@ let src2 = [
   'DDD',
 ];
 
-src1 = 'XABCDAXZZ';
-src2 = 'XBFEABDBYZ';
+src1 = 'XABCDAXZV';
+src2 = 'XBFEABDBYZZ';
 
 // src1 = 'ADCBAX';
 // src2 = 'DBAEFBX';
@@ -34,8 +34,8 @@ src2 = 'XBFEABDBYZ';
 // src1 = 'Determines the height of the cursor. Default is 1, meaning it spans the whole height of the line. For some fonts (and by some tastes) a smaller height (for example 0.85), which causes the cursor to not reach all the way to the bottom of the line, looks better';
 // src2 = 'Determines the height of the cursor. Default is 1, meaning it spans the whole height of the l87or some fonts (and by some tastes) a smaller height (for example 0.85), which causes the cursor to not reach all the way to the bottom of the line, looks better';
 
-src1 = fs.readFileSync(path.join(__dirname, 'txt-codemirror-man1.txt')).toLocaleString();
-src2 = fs.readFileSync(path.join(__dirname, 'txt-codemirror-man2.txt')).toLocaleString();
+// src1 = fs.readFileSync(path.join(__dirname, 'txt-codemirror-man1.txt')).toLocaleString();
+// src2 = fs.readFileSync(path.join(__dirname, 'txt-codemirror-man2.txt')).toLocaleString();
 
 const start = Date.now();
 console.log('start: ' + start);
