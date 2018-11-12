@@ -80,21 +80,23 @@ function init({ a = '', b = '' }: { a: string | string[], b: string | string[] }
  */
 
 function getUnifiedResult(source: Source, headL: Path, headR: Path) {
-  const unifiedResultL = new UnifiedResultL(source, headL, []);
+  const unifiedResultL = new UnifiedResultL(source);
   
   const { m, n } = source;
-  const [, resultL] = unifiedResultL.run();
-  const head = recurse<Path>(
-    ({ x, y }) => headL.x > (m - x + 1) || headL.y > (n - y + 1),
-    ({ parent }) => parent as Path
-  )(headR);
-  const unifiedResultR = new UnifiedResultR(source, head, resultL);
-  const [, result] = unifiedResultR.run();
+  const [, resultL] = unifiedResultL.run(headL, []);
+  const [head] = recurse<[Path?, Path?]>(
+    ([, parent]) => !!parent && headL.x >= (m - parent.x - 1) && headL.y >= (n - parent.y - 1),
+    ([pathR, parent]) => [pathR.parent, parent.parent.parent]
+  )([headR, headR.parent]);
+  if (!head) {
+    return resultL;
+  }
+  const [, result] = new UnifiedResultR(source).run(head, resultL);
   return result;
 }
 
 abstract class UnifiedResult {
-  constructor(protected source: Source, protected head, protected preResult) {
+  constructor(protected source: Source) {
     this.a = source.a;
     this.b = source.b;
     this.m = source.m;
@@ -112,7 +114,7 @@ abstract class UnifiedResult {
   makeElem(value: string, t: ElemType) {
     return { value, added: t === ElemType.added, removed: t === ElemType.removed, common: t === ElemType.common };
   }
-  run() {
+  run(head: Path, preResult: Ses[]) {
     return recurse<[Path, Ses[]]>(
       ([{ x }]) => x > 0,
       ([{ x, y, parent = { x: 0, y: 0 } }, acc]) => {
@@ -122,7 +124,7 @@ abstract class UnifiedResult {
         const diffOrNull = this.getDiff(diffX - diffY, parent);
         return [parent, this.getAcc([undiffOrNull, diffOrNull, [...undiffOrNull, ...diffOrNull], acc, acc])];
       }
-    )([this.head, this.preResult]);
+    )([head, preResult]);
   }
 }
 
