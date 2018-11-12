@@ -79,108 +79,106 @@ function init({ a = '', b = '' }: { a: string | string[], b: string | string[] }
  * Format result
  */
 
+type UnifiedResultArgs = [
+  { (x: number, undiffs: number): Ses[] },
+  { (diffs: number, parent: Path): Ses[] },
+  { ([undiffOrNull, diffOrNull, [diff], [prev, ...tail], acc]: Ses[][]): Ses[] }
+];
+
 function getUnifiedResult(source: Source, headL: Path, headR: Path) {
-  const unifiedResultL = new UnifiedResultL(source);
-  
   const { m, n } = source;
-  const [, resultL] = unifiedResultL.run(headL, []);
+  const [, resultL] = unifiedResult(unifiedResultL(source))(headL, []);
   const [head] = recurse<[Path?, Path?]>(
-    ([, parent]) => !!parent && headL.x >= (m - parent.x - 1) && headL.y >= (n - parent.y - 1),
-    ([pathR, parent]) => [pathR.parent, parent.parent.parent]
+    ([, parent]) => !!parent && headL.x > (m - parent.x - 1) && headL.y > (n - parent.y - 1),
+    ([pathR = { parent: undefined }, parent = { parent: undefined }]) => [pathR.parent, parent.parent]
   )([headR, headR.parent]);
   if (!head) {
     return resultL;
   }
-  const [, result] = new UnifiedResultR(source).run(head, resultL);
+  const [, result] = unifiedResult(unifiedResultR(source))(head, resultL);
   return result;
 }
 
-abstract class UnifiedResult {
-  constructor(protected source: Source) {
-    this.a = source.a;
-    this.b = source.b;
-    this.m = source.m;
-    this.n = source.n;
-    this.flip = source.flip;
-  }
-  protected a: string | string[];
-  protected b: string | string[];
-  protected flip: boolean;
-  protected m: number;
-  protected n: number;
-  abstract getUndiff(x: number, undiffs: number);
-  abstract getDiff(diffs: number, parent: Path);
-  abstract getAcc(ses: Ses[][]);
-  makeElem(value: string, t: ElemType) {
-    return { value, added: t === ElemType.added, removed: t === ElemType.removed, common: t === ElemType.common };
-  }
-  run(head: Path, preResult: Ses[]) {
+function makeElem(value: string, t: ElemType) {
+  return { value, added: t === ElemType.added, removed: t === ElemType.removed, common: t === ElemType.common };
+}
+
+function unifiedResult([getUndiff, getDiff, getAcc]: UnifiedResultArgs) {
+  return (head: Path, preResult: Ses[]) => {
     return recurse<[Path, Ses[]]>(
       ([{ x }]) => x > 0,
       ([{ x, y, parent = { x: 0, y: 0 } }, acc]) => {
         const diffX = x - parent.x;
         const diffY = y - parent.y;
-        const undiffOrNull = this.getUndiff(x, Math.min(diffX, diffY));
-        const diffOrNull = this.getDiff(diffX - diffY, parent);
-        return [parent, this.getAcc([undiffOrNull, diffOrNull, [...undiffOrNull, ...diffOrNull], acc, acc])];
+        const undiffOrNull = getUndiff(x, Math.min(diffX, diffY));
+        const diffOrNull = getDiff(diffX - diffY, parent);
+        return [parent, getAcc([undiffOrNull, diffOrNull, [...undiffOrNull, ...diffOrNull], acc, acc])];
       }
     )([head, preResult]);
   }
 }
 
-class UnifiedResultL extends UnifiedResult {
-  getAcc([undiffOrNull, diffOrNull, [diff], [prev, ...tail], acc]: Ses[][]): Ses[] {
-    if (prev && ((prev.added && diff.added) || (prev.removed && diff.removed))) {
-      return [Object.assign({}, prev, { "value": diff.value + prev.value }), ...tail];
+function unifiedResultL({ a, b, flip }): UnifiedResultArgs {
+  return [
+    function getUndiff(x, undiffs): [Ses] | never[] {
+      if (undiffs > 0) {
+        return [makeElem(a.slice(x - undiffs, x) as string, ElemType.common)];
+      }
+      return [];
+    },
+    function getDiff(diffs: number, { x, y }): [Ses] | never[] {
+      if (diffs > 0) {
+        return [makeElem(a[x], flip ? ElemType.added : ElemType.removed)];
+      }
+      if (diffs < 0) {
+        return [makeElem(b[y], flip ? ElemType.removed : ElemType.added)];
+      }
+      return [];
+    },
+    function getAcc([undiffOrNull, diffOrNull, [diff], [prev, ...tail], acc]: Ses[][]): Ses[] {
+      if (prev && ((prev.added && diff.added) || (prev.removed && diff.removed))) {
+        return [Object.assign({}, prev, { "value": diff.value + prev.value }), ...tail];
+      }
+      return [...diffOrNull, ...undiffOrNull, ...acc];
     }
-    return [...diffOrNull, ...undiffOrNull, ...acc];
-  }
-  getUndiff(x, undiffs): [Ses] | never[] {
-    if (undiffs > 0) {
-      return [this.makeElem(this.a.slice(x - undiffs, x) as string, ElemType.common)];
-    }
-    return [];
-  }
-  getDiff(diffs: number, { x, y }): [Ses] | never[] {
-    if (diffs > 0) {
-      return [this.makeElem(this.a[x], this.flip ? ElemType.added : ElemType.removed)];
-    }
-    if (diffs < 0) {
-      return [this.makeElem(this.b[y], this.flip ? ElemType.removed : ElemType.added)];
-    }
-    return [];
-  }
+  ];
 }
 
-class UnifiedResultR extends UnifiedResult {
-  getAcc([undiffOrNull, diffOrNull, [diff], acc]: Ses[][]): Ses[] {
-    const [undiff] = undiffOrNull;
-    const [prev] = acc.slice(- 1);
-    const tail = acc.slice(0, - 1);
-    if (prev.common && undiff && undiff.common) {
-      return [...acc, ...diffOrNull];
+function unifiedResultR({ a, b, m, n, flip }): UnifiedResultArgs {
+  return [
+    function getUndiff(x, undiffs): [Ses] | never[] {
+      if (undiffs > 0) {
+        return [makeElem(a.slice(m - x, m - x + undiffs) as string, ElemType.common)];
+      }
+      return [];
+    },
+    function getDiff(diffs: number, { x, y }): [Ses] | never[] {
+      if (diffs > 0) {
+        return [makeElem(a[m - x - 1], flip ? ElemType.added : ElemType.removed)];
+      }
+      if (diffs < 0) {
+        return [makeElem(b[n - y - 1], flip ? ElemType.removed : ElemType.added)];
+      }
+      return [];
+    },
+    function getAcc([undiffOrNull, diffOrNull, [diff], acc]: Ses[][]): Ses[] {
+      const [undiff] = undiffOrNull;
+      const [prev] = acc.slice(- 1);
+      const tail = acc.slice(0, - 1);
+      if (prev.common && undiff && undiff.common) {
+        return [...acc, ...diffOrNull];
+      }
+      if ((prev.added && diff.added) || (prev.removed && diff.removed)) {
+        return [...tail, Object.assign({}, prev, { "value": prev.value + diff.value })];
+      }
+      return [...acc, ...undiffOrNull, ...diffOrNull];
     }
-    if ((prev.added && diff.added) || (prev.removed && diff.removed)) {
-      return [...tail, Object.assign({}, prev, { "value": prev.value + diff.value })];
-    }
-    return [...acc, ...undiffOrNull, ...diffOrNull];
-  }
-  getUndiff(x, undiffs): [Ses] | never[] {
-    if (undiffs > 0) {
-      return [this.makeElem(this.a.slice(this.m - x, this.m - x + undiffs) as string, ElemType.common)];
-    }
-    return [];
-  }
-  getDiff(diffs: number, { x, y }): [Ses] | never[] {
-    if (diffs > 0) {
-      return [this.makeElem(this.a[this.m - x - 1], this.flip ? ElemType.added : ElemType.removed)];
-    }
-    if (diffs < 0) {
-      return [this.makeElem(this.b[this.n - y - 1], this.flip ? ElemType.removed : ElemType.added)];
-    }
-    return [];
-  }
+  ]
 }
+
+/**
+ * Snake
+ */
 
 const snakeConditionL: SnakeCondition = ({ a, b, m, n }) => ([x, y]) => x < m && y < n && a[x] === b[y];
 const snakeConditionR: SnakeCondition = ({ a, b, m, n }) => ([x, y]) => x < m && y < n && a[m - x - 1] === b[n - y - 1];
@@ -198,6 +196,10 @@ function Snake(offset: number, fp: Fpk[], paths: Path[], condition: {([x, y]: [n
     paths.push({ x, y, parent });
   }
 };
+
+/**
+ * ONP main
+ */
 
 function Onp(source: Source, offset: number, delta: number, rangeKN: number[], rangeKM: number[]) {
   return (nMax: number, snakeCondition: SnakeCondition): Path => {
@@ -229,11 +231,12 @@ export function diff(a: string | string[], b: string | string[]) {
 
   const rangeKN = [...Array(n)].map((_, i) => - (n - i) + delta);
   const rangeKM = [...Array(m + 1)].map((_, i) => m - i + delta);
+  log(rangeKN, rangeKM);
 
   const onp = Onp(source, offset, delta, rangeKN, rangeKM);
 
   const headL = onp(nL, snakeConditionL);
   const headR = onp(nR + 3, snakeConditionR);
-  // log(headL, headR);
+
   return getUnifiedResult(source, headL, headR);
 }
