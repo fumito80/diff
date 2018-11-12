@@ -4,16 +4,12 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "type": "typescript",
-            "tsconfig": "tsconfig.json",
-            "problemMatcher": [
-                "$tsc"
-            ]
-        },
-        {
             "label": "Build diff",
             "type": "gulp",
             "task": "babel-diffjs",
+            "options": {
+                "cwd": "${workspaceRoot}/client"
+            },
             "problemMatcher": [],
             "group": {
                 "kind": "build",
