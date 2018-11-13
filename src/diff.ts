@@ -48,9 +48,16 @@ type Ses = {
   "common": boolean
 };
 
-type SnakeCondition = { (s: Source): { ([x, y]: [number, number]): boolean } };
-
 enum ElemType { added, removed, common };
+
+type UnifiedResultFuns = {
+  getUndiff: { (x: number, undiffs: number): Ses[] },
+  getDiff:   { (diffs: number, parent: Path): Ses[] },
+  getAcc:    { ([undiffOrNull, diffOrNull, [diff], [prev, ...tail], acc]: Ses[][]): Ses[] }
+};
+
+type Snake = { (k: number, y1: number): [number, number, number] };
+type SnakeLorR = { (s: Source): Snake };
 
 /**
  * Flip args(text) by length.
@@ -79,12 +86,6 @@ function init({ a = '', b = '' }: { a: string | string[], b: string | string[] }
  * Format result
  */
 
-type UnifiedResultArgs = [
-  { (x: number, undiffs: number): Ses[] },
-  { (diffs: number, parent: Path): Ses[] },
-  { ([undiffOrNull, diffOrNull, [diff], [prev, ...tail], acc]: Ses[][]): Ses[] }
-];
-
 function getUnifiedResult(source: Source, headL: Path, headR: Path) {
   const { m, n } = source;
   const [newHeadL, newHeadR] = recurse<any[]>(
@@ -103,15 +104,11 @@ function getUnifiedResult(source: Source, headL: Path, headR: Path) {
     }
   )([headL, headR, headL.parent, headR.parent]);
 
-  const [, resultL] = unifiedResult(unifiedResultL(source))(newHeadL, []);
-  // const [head] = recurse<[Path?, Path?]>(
-  //   ([, parent]) => !!parent && headL.x > (m - parent.x - 1) && headL.y > (n - parent.y - 1),
-  //   ([pathR = { parent: undefined }, parent = { parent: undefined }]) => [pathR.parent, parent.parent]
-  // )([headR, headR.parent]);
+  const [, resultL] = unifiedResult(unifiedL(source))(newHeadL, []);
   if (!newHeadR || (newHeadL.x >= m && newHeadL.y >= n)) {
     return resultL;
   }
-  const [, result] = unifiedResult(unifiedResultR(source))(newHeadR, resultL);
+  const [, result] = unifiedResult(unifiedR(source))(newHeadR, resultL);
   return result;
 }
 
@@ -119,7 +116,7 @@ function makeElem(value: string, t: ElemType) {
   return { value, added: t === ElemType.added, removed: t === ElemType.removed, common: t === ElemType.common };
 }
 
-function unifiedResult([getUndiff, getDiff, getAcc]: UnifiedResultArgs) {
+function unifiedResult({ getUndiff, getDiff, getAcc }: UnifiedResultFuns) {
   return (head: Path, preResult: Ses[]) => {
     return recurse<[Path, Ses[]]>(
       ([path]) => !!path,
@@ -135,15 +132,15 @@ function unifiedResult([getUndiff, getDiff, getAcc]: UnifiedResultArgs) {
   }
 }
 
-function unifiedResultL({ a, b, flip }): UnifiedResultArgs {
-  return [
-    function getUndiff(x, undiffs): [Ses] | never[] {
+function unifiedL({ a, b, flip }): UnifiedResultFuns {
+  return {
+    getUndiff: (x, undiffs): [Ses] | never[] => {
       if (undiffs > 0) {
         return [makeElem(a.slice(x - undiffs, x) as string, ElemType.common)];
       }
       return [];
     },
-    function getDiff(diffs: number, { x, y }): [Ses] | never[] {
+    getDiff: (diffs: number, { x, y }): [Ses] | never[] => {
       if (diffs > 0) {
         return [makeElem(a[x], flip ? ElemType.added : ElemType.removed)];
       }
@@ -152,24 +149,24 @@ function unifiedResultL({ a, b, flip }): UnifiedResultArgs {
       }
       return [];
     },
-    function getAcc([undiffOrNull, diffOrNull, [diff], [prev, ...tail], acc]: Ses[][]): Ses[] {
+    getAcc: ([undiffOrNull, diffOrNull, [diff], [prev, ...tail], acc]: Ses[][]): Ses[] => {
       if (prev && ((prev.added && diff.added) || (prev.removed && diff.removed))) {
         return [Object.assign({}, prev, { "value": diff.value + prev.value }), ...tail];
       }
       return [...diffOrNull, ...undiffOrNull, ...acc];
     }
-  ];
+  };
 }
 
-function unifiedResultR({ a, b, m, n, flip }): UnifiedResultArgs {
-  return [
-    function getUndiff(x, undiffs): [Ses] | never[] {
+function unifiedR({ a, b, m, n, flip }): UnifiedResultFuns {
+  return {
+    getUndiff: (x, undiffs): [Ses] | never[] => {
       if (undiffs > 0) {
         return [makeElem(a.slice(m - x, m - x + undiffs) as string, ElemType.common)];
       }
       return [];
     },
-    function getDiff(diffs: number, { x, y }): [Ses] | never[] {
+    getDiff: (diffs: number, { x, y }): [Ses] | never[] => {
       if (diffs > 0) {
         return [makeElem(a[m - x - 1], flip ? ElemType.added : ElemType.removed)];
       }
@@ -178,7 +175,7 @@ function unifiedResultR({ a, b, m, n, flip }): UnifiedResultArgs {
       }
       return [];
     },
-    function getAcc([undiffOrNull, diffOrNull, [diff], acc]: Ses[][]): Ses[] {
+    getAcc: ([undiffOrNull, diffOrNull, [diff], acc]: Ses[][]): Ses[] => {
       const [undiff] = undiffOrNull;
       const [prev] = acc.slice(- 1);
       const tail = acc.slice(0, - 1);
@@ -190,31 +187,14 @@ function unifiedResultR({ a, b, m, n, flip }): UnifiedResultArgs {
       }
       return [...acc, ...undiffOrNull, ...diffOrNull];
     }
-  ]
+  }
 }
 
 /**
  * Snake
  */
 
-// const snakeConditionL: SnakeCondition = ({ a, b, m, n }) => ([x, y]) => x < m && y < n && a[x] === b[y];
-// const snakeConditionR: SnakeCondition = ({ a, b, m, n }) => ([x, y]) => x < m && y < n && a[m - x - 1] === b[n - y - 1];
-
-// function Snake(offset: number, fp: Fpk[], paths: Path[], snake, condition: { ([x, y]: [number, number]): boolean }) {
-//   return (k: number): void => {
-//     const [p, pp] = [fp[k - 1 + offset].fp + 1, fp[k + 1 + offset].fp];
-//     const [y1, dir] = p > pp ? [p, -1] : [pp, 1];
-//     const [x, y] = recurse<[number, number]>(
-//       condition,
-//       ([x, y]) => [x + 1, y + 1]
-//     )([y1, y1 - k]);
-//     fp[k + offset] = { "fp": y, "k": paths.length };
-//     const parent = paths[fp[k + dir + offset].k];
-//     paths.push({ x, y, parent });
-//   }
-// };
-
-const snakeL = ({ a, b, m, n }: Source) => {
+const snakeL: SnakeLorR = ({ a, b, m, n }: Source) => {
   return (k: number, y1: number) => {
     const [x, y] = recurse<[number, number]>(
       ([x, y]) => x < m && y < n && a[x] === b[y],
@@ -224,7 +204,7 @@ const snakeL = ({ a, b, m, n }: Source) => {
   }
 }
 
-const snakeR = ({ a, b, m, n }: Source) => {
+const snakeR: SnakeLorR = ({ a, b, m, n }: Source) => {
   return (k: number, y1: number) => {
     const [x, y] = recurse<[number, number]>(
       ([x, y]) => x < m && y < n && a[m - x - 1] === b[n - y - 1],
@@ -234,7 +214,7 @@ const snakeR = ({ a, b, m, n }: Source) => {
   }
 }
 
-function Snake(offset: number, fp: Fpk[], paths: Path[], snake) {
+function snakeOnp(offset: number, fp: Fpk[], paths: Path[], snake: Snake) {
   return (k: number): void => {
     const [p, pp] = [fp[k - 1 + offset].fp + 1, fp[k + 1 + offset].fp];
     const [y1, dir] = p > pp ? [p, -1] : [pp, 1];
@@ -250,11 +230,11 @@ function Snake(offset: number, fp: Fpk[], paths: Path[], snake) {
  */
 
 function Onp(source: Source, offset: number, delta: number, rangeKN: number[], rangeKM: number[]) {
-  return (nMax: number, snakeFun): Path => {
+  return (nMax: number, snakeLorR: SnakeLorR): Path => {
     const { m, n } = source;
     const paths: Path[] = [];
     const fpk: Fpk[] = new Array(m + nMax + 3).fill({ "fp": - 1, "k": - 1 });
-    const snake = Snake(offset, fpk, paths, snakeFun(source));
+    const snake = snakeOnp(offset, fpk, paths, snakeLorR(source));
     const [, { k }] = recurse<[number, Fpk]>(
       ([, { fp }]) => fp < nMax,
       ([p]) => {
