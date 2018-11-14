@@ -33,6 +33,8 @@ type Source = {
 type Path = {
   "x": number,
   "y": number,
+  "dir": number,
+  "diffY": number,
   "parent"?: Path
 };
 
@@ -52,7 +54,7 @@ enum ElemType { added, removed, common };
 
 type UnifiedResultFuns = {
   getUndiff: { (x: number, undiffs: number): Ses[] },
-  getDiff:   { (diffs: number, parent: Path): Ses[] },
+  getDiff:   { (diffs: number, parent: { x: number, y: number }): Ses[] },
   getAcc:    { ([undiffOrNull, diffOrNull, [diff], [prev, ...tail], acc]: Ses[][]): Ses[] }
 };
 
@@ -88,24 +90,19 @@ function init({ a = '', b = '' }: { a: string | string[], b: string | string[] }
 
 function getUnifiedResult(source: Source, headL: Path, headR: Path) {
   const { m, n } = source;
-  const [newHeadL, newHeadR] = recurse<any[]>(
-    ([,, parentL, parentR]: Path[] | undefined[]) => {
-      return !!parentL && !!parentR
-        && parentL.x - (m - parentR.x - 1) > 1
-        && parentL.y - (n - parentR.y - 1) > 1;
+  const [newHeadR] = recurse<any[]>(
+    ([, parent]: Path[] | undefined[]) => {
+      return !!parent
+        && headL.x - (m - parent.x - 1) > 1
+        && headL.y - (n - parent.y - 1) > 1;
     },
-    ([
-      pathL = { parent: undefined },
-      pathR = { parent: undefined },
-      parentL = { parent: undefined },
-      parentR = { parent: undefined }
-    ]) => {
-      return [pathL.parent, pathR.parent, parentL.parent, parentR.parent];
+    ([path = { parent: undefined }, parent = { parent: undefined }]) => {
+      return [path.parent, parent.parent];
     }
-  )([headL, headR, headL.parent, headR.parent]);
+  )([headR, headR.parent]);
 
-  const [, resultL] = unifiedResult(unifiedL(source))(newHeadL, []);
-  if (!newHeadR || (newHeadL.x >= m && newHeadL.y >= n)) {
+  const [, resultL] = unifiedResult(unifiedL(source))(headL, []);
+  if (!newHeadR || (headL.x >= m && headL.y >= n)) {
     return resultL;
   }
   const [, result] = unifiedResult(unifiedR(source))(newHeadR, resultL);
@@ -221,22 +218,35 @@ function snakeOnp(offset: number, fp: Fpk[], paths: Path[], snake: Snake) {
     const [x, y, fpValue] = snake(k, y1);
     fp[k + offset] = { "fp": fpValue, "k": paths.length };
     const parent = paths[fp[k + dir + offset].k];
-    paths.push({ x, y, parent });
+    paths.push({ x, y, dir, diffY: y - y1, parent });
   }
 };
+
+function onpConditionL(pMax, paths, n) {
+  return ([, { fp, k }]) => {
+    if (fp < pMax) {
+      return true;
+    }
+    return paths[k].diffY === 0 && fp < n;
+  }
+}
+
+function onpConditionR(pMax) {
+  return ([, { fp }]) => fp < pMax;
+}
 
 /**
  * ONP main
  */
 
 function Onp(source: Source, offset: number, delta: number, rangeKN: number[], rangeKM: number[]) {
-  return (nMax: number, snakeLorR: SnakeLorR): Path => {
+  return (pMax: number, snakeLorR: SnakeLorR, condition): Path => {
     const { m, n } = source;
     const paths: Path[] = [];
-    const fpk: Fpk[] = new Array(m + nMax + 3).fill({ "fp": - 1, "k": - 1 });
+    const fpk: Fpk[] = new Array(m + n + 3).fill({ "fp": - 1, "k": - 1 });
     const snake = snakeOnp(offset, fpk, paths, snakeLorR(source));
     const [, { k }] = recurse<[number, Fpk]>(
-      ([, { fp }]) => fp < nMax,
+      condition(pMax, paths, n),
       ([p]) => {
         rangeKN.slice(n - p).forEach(snake);
         rangeKM.slice(m - p + delta).forEach(snake);
@@ -261,8 +271,8 @@ export function diff(a: string | string[], b: string | string[]) {
   const rangeKM = [...Array(m + 1)].map((_, i) => m - i + delta);
 
   const onp = Onp(source, offset, delta, rangeKN, rangeKM);
-  const headL = onp(nL, snakeL);
-  const headR = onp(nR + 1, snakeR);
+  const headL = onp(nL, snakeL, onpConditionL);
+  const headR = onp(nR + 1, snakeR, onpConditionR);
   // log(headL, headR);
 
   return getUnifiedResult(source, headL, headR);
