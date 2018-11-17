@@ -56,7 +56,7 @@ console.log('end: ' + end + ', lap: ' + (end - start));
 
 function mydiff() {
   console.log('mydiff();');
-  let promise = diff.diff(src1 || process.argv[2], src2 || process.argv[3]);
+  let promise = diff.diff(src1 || process.argv[2], src2 || process.argv[3], 60000);
   // console.log(ses);
 
   promise.then(ses => {

@@ -1,12 +1,8 @@
 'use strict';
 
-import threads from 'threads';
-
 /**
  * Common Functions
  */
-
-type Recurse<T> = { (cbCondition: (a: T) => boolean, cbRecurse: (a: T) => T): (arg: T) => T }
 
 function recurse<T>(cbCondition: { (a: T): boolean }, cbRecurse: { (a: T): T }) {
   function run(arg: T): T {
@@ -17,7 +13,13 @@ function recurse<T>(cbCondition: { (a: T): boolean }, cbRecurse: { (a: T): T }) 
   }
   return run;
 }
-
+function toObject<T>(array: [string, T][]) {
+  return array.reduce((acc, [key, value]) => {
+    acc[key] = value;
+    return acc;
+  }, {} as { [key: string]: T });
+}
+const pipe = (fn, ...fns) => (arg) => fns.reduce((acc, fn2) => fn2(acc), fn(arg));
 const log = (...ss) => ss.forEach(s => console.log(JSON.stringify(s, null, 2)));
 
 /**
@@ -79,33 +81,28 @@ type UnifiedResultFuns = {
   getAcc:    { ([undiffOrNull, diffOrNull, [diff], [prev, ...tail], acc]: Ses[][]): Ses[] }
 };
 
-function getHeadR({ m, n }: Source, headL: Path, headR: Path) {
-  const [newHeadR] = recurse<[Path | undefined, Path | undefined]>(
-    ([, parent]) => {
-      return !!parent
-        && headL.x - (m - parent.x - 1) > 1
-        && headL.y - (n - parent.y - 1) > 1;
-    },
-    ([path = { parent: undefined }, parent = { parent: undefined }]) => {
-      return [path.parent, parent.parent];
-    }
-  )([headR, headR.parent]);
-  return newHeadR;
-}
-
-function toKeyValue<T>(array: [string, T][]) {
-  return array.reduce((acc, [key, value]) => {
-    acc[key] = value;
-    return acc;
-  }, {} as { [key: string]: T });
+function getHeadR({ m, n }: Source, headL: Path) {
+  return (headR: Path) => {
+    const [newHeadR] = recurse<[Path | undefined, Path | undefined]>(
+      ([, parent]) => {
+        return !!parent
+          && headL.x - (m - parent.x - 1) > 1
+          && headL.y - (n - parent.y - 1) > 1;
+      },
+      ([path = { parent: undefined }, parent = { parent: undefined }]) => {
+        return [path.parent, parent.parent];
+      }
+    )([headR, headR.parent]);
+    return newHeadR as Path;
+  }
 }
 
 function makeElem(value: string, t: ElemType) {
   return { value, added: t === ElemType.added, removed: t === ElemType.removed, common: t === ElemType.common };
 }
 
-export function unifiedResult({ getUndiff, getDiff, getAcc }: UnifiedResultFuns) {
-  return (head: Path, preResult: Ses[]) => {
+export function unifiedResult({ getUndiff, getDiff, getAcc }: UnifiedResultFuns, preResult: Ses[]) {
+  return (head: Path) => {
     const [, result] = recurse<[Path, Ses[]]>(
       ([path]) => !!path,
       ([path, acc]) => {
@@ -168,7 +165,7 @@ export const unifieds = {
         const [undiff] = undiffOrNull;
         const [prev] = acc.slice(- 1);
         const tail = acc.slice(0, - 1);
-        if (!prev && undiff && undiff.common) {
+        if ((!prev || prev.common) && undiff && undiff.common) {
           return [...acc, ...diffOrNull];
         }
         if (diff && prev && ((prev.added && diff.added) || (prev.removed && diff.removed))) {
@@ -268,7 +265,7 @@ export function Onp(source: Source, offset: number, delta: number, rangeKN: numb
  * Diff main
  */
 
-export function diff(a: string | string[], b: string | string[]) {
+export function diff(a: string | string[], b: string | string[], threshold = 100000) {
   const source = init({ a, b });
   const { m, n, nL, nR } = source;
   const offset = m + 1;
@@ -277,32 +274,47 @@ export function diff(a: string | string[], b: string | string[]) {
   const rangeKN = [...Array(n)].map((_, i) => - (n - i) + delta);
   const rangeKM = [...Array(m + 1)].map((_, i) => m - i + delta);
 
-  threads.config.set({
-    basepath : {
-      node : __dirname,
-      web  : 'http://myserver.local/thread-scripts'
-    }
-  });
+  const onp = Onp(source, offset, delta, rangeKN, rangeKM);
 
-  return new Promise(resolve => {
-    const thOnp = threads.spawn('thOnp.js');
-    const promiseOnp = thOnp.send(['R', nR, { source, delta, offset, rangeKN, rangeKM }]).promise();
-    const headL = Onp(source, offset, delta, rangeKN, rangeKM)(Snakes['L'](nL));
-    promiseOnp.then(headR => {
-      const newHeadR = getHeadR(source, headL, headR);
-      if (!newHeadR || (headL.x >= m && headL.y >= n)) {
-        const resultL = unifiedResult(unifieds.L(source))(headL, []);
-        resolve(resultL);
-      } else {
-        const thResult = threads.spawn('thResult.js');
-        const promiseResult = thResult.send(['R', source, newHeadR]).promise();
-        const resultL = unifiedResult(unifieds.L(source))(headL, []);
-        promiseResult.then(resultR => {
-          resolve(([] as Ses[]).concat(...resultL, ...resultR));
-          thResult.kill();
-        });
+  if (n < threshold) {
+    const headL = onp(Snakes.L(nR));
+    const resultL = unifiedResult(unifieds.L(source), [])(headL);
+    if (headL.x >= m && headL.y >= n) {
+      return Promise.resolve(resultL);
+    }
+    const result = pipe(onp, getHeadR(source, headL), unifiedResult(unifieds.R(source), resultL))(Snakes.R(nL));
+    return Promise.resolve(result);
+  } else {
+    const threads = require('threads');
+    const pool = new threads.Pool(2);
+    threads.config.set({
+      basepath : {
+        node : __dirname,
+        web  : 'http://myserver.local/thread-scripts'
       }
-      thOnp.kill();
+    });    
+    return new Promise(resolve => {
+      pool.run('thOnp.js');
+      Promise.all([
+        pool.send(['L', nL, { source, delta, offset, rangeKN, rangeKM }]).promise(),
+        pool.send(['R', nR, { source, delta, offset, rangeKN, rangeKM }]).promise(),
+      ]).then(heads => {
+        const head = toObject<Path>(heads) as { "L": Path, "R": Path };
+        if (head.L.x >= m && head.L.y >= n) {
+          const resultL = unifiedResult(unifieds.L(source), [])(head.L);
+          resolve(resultL);
+          pool.killAll();
+        } else {
+          pool.run('thResult.js');
+          const newHeadR = getHeadR(source, head.L)(head.R);
+          const promiseResult = pool.send(['R', source, newHeadR]).promise();
+          const resultL = unifiedResult(unifieds.L(source), [])(head.L);
+          promiseResult.then(resultR => {
+            resolve(([] as Ses[]).concat(...resultL, ...resultR));
+            pool.killAll();
+          });
+        }
+      });
     });
-  });
+  }
 }
