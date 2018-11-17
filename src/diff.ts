@@ -6,8 +6,6 @@ import threads from 'threads';
  * Common Functions
  */
 
-type Recurse<T> = { (cbCondition: (a: T) => boolean, cbRecurse: (a: T) => T): (arg: T) => T }
-
 function recurse<T>(cbCondition: { (a: T): boolean }, cbRecurse: { (a: T): T }) {
   function run(arg: T): T {
     if (cbCondition(arg)) {
@@ -268,6 +266,15 @@ export function Onp(source: Source, offset: number, delta: number, rangeKN: numb
  * Diff main
  */
 
+threads.config.set({
+  basepath : {
+    node : __dirname,
+    web  : 'http://myserver.local/thread-scripts'
+  }
+});
+
+const thread = threads.spawn();
+
 export function diff(a: string | string[], b: string | string[]) {
   const source = init({ a, b });
   const { m, n, nL, nR } = source;
@@ -277,32 +284,25 @@ export function diff(a: string | string[], b: string | string[]) {
   const rangeKN = [...Array(n)].map((_, i) => - (n - i) + delta);
   const rangeKM = [...Array(m + 1)].map((_, i) => m - i + delta);
 
-  threads.config.set({
-    basepath : {
-      node : __dirname,
-      web  : 'http://myserver.local/thread-scripts'
-    }
-  });
-
   return new Promise(resolve => {
-    const thOnp = threads.spawn('thOnp.js');
-    const promiseOnp = thOnp.send(['R', nR, { source, delta, offset, rangeKN, rangeKM }]).promise();
+    thread.run('thOnp.js');
+    const promiseOnp = thread.send(['R', nR, { source, delta, offset, rangeKN, rangeKM }]).promise();
     const headL = Onp(source, offset, delta, rangeKN, rangeKM)(Snakes['L'](nL));
     promiseOnp.then(headR => {
       const newHeadR = getHeadR(source, headL, headR);
       if (!newHeadR || (headL.x >= m && headL.y >= n)) {
         const resultL = unifiedResult(unifieds.L(source))(headL, []);
         resolve(resultL);
+        thread.kill();
       } else {
-        const thResult = threads.spawn('thResult.js');
-        const promiseResult = thResult.send(['R', source, newHeadR]).promise();
+        thread.run('thResult.js');
+        const promiseResult = thread.send(['R', source, newHeadR]).promise();
         const resultL = unifiedResult(unifieds.L(source))(headL, []);
         promiseResult.then(resultR => {
           resolve(([] as Ses[]).concat(...resultL, ...resultR));
-          thResult.kill();
+          thread.kill();
         });
       }
-      thOnp.kill();
     });
   });
 }
