@@ -32,7 +32,7 @@ gulp.task('tsc-cli', _ => {
 });
 
 gulp.task('diffjs', _ => {
-  return gulp.src(['./src/diff.ts', './src/list.ts'])
+  return gulp.src(['./src/diff.ts', './src/thOnp.ts', './src/thResult.ts'])
     .pipe(ts.createProject('tsconfig.json')())
     .pipe(gulp.dest('js/client'));
 });
@@ -44,7 +44,7 @@ gulp.task('babel-diffjs', ['diffjs'], function() {
  * babel
  */
 function babelDiffJs() {
-  gulp.src(['js/client/diff.js', 'js/client/list.js'])
+  gulp.src(['js/client/diff.js', 'js/client/thOnp.js', 'js/client/thResult.js'])
     .pipe(babel())
     .pipe(gulp.dest(`lib/client/`))
 }
