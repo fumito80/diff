@@ -286,7 +286,8 @@ export function diff(a: string | string[], b: string | string[], threshold = 100
     return Promise.resolve(result);
   } else {
     const threads = require('threads');
-    const pool = new threads.Pool(2);
+    const thread1 = new threads.spawn;
+    const thread2 = new threads.spawn;
     threads.config.set({
       basepath : {
         node : __dirname,
@@ -294,24 +295,26 @@ export function diff(a: string | string[], b: string | string[], threshold = 100
       }
     });    
     return new Promise(resolve => {
-      pool.run('thOnp.js');
+      thread1.run('thOnp.js');
+      thread2.run('thOnp.js');
       Promise.all([
-        pool.send(['L', nL, { source, delta, offset, rangeKN, rangeKM }]).promise(),
-        pool.send(['R', nR, { source, delta, offset, rangeKN, rangeKM }]).promise(),
+        thread1.send(['L', nL, { source, delta, offset, rangeKN, rangeKM }]).promise(),
+        thread2.send(['R', nR, { source, delta, offset, rangeKN, rangeKM }]).promise(),
       ]).then(heads => {
+        thread2.kill();
         const head = toObject<Path>(heads) as { "L": Path, "R": Path };
         if (head.L.x >= m && head.L.y >= n) {
           const resultL = unifiedResult(unifieds.L(source), [])(head.L);
           resolve(resultL);
-          pool.killAll();
+          thread1.kill();
         } else {
-          pool.run('thResult.js');
+          thread1.run('thResult.js');
           const newHeadR = getHeadR(source, head.L)(head.R);
-          const promiseResult = pool.send(['R', source, newHeadR]).promise();
+          const promiseResult = thread1.send(['R', source, newHeadR]).promise();
           const resultL = unifiedResult(unifieds.L(source), [])(head.L);
           promiseResult.then(resultR => {
             resolve(([] as Ses[]).concat(...resultL, ...resultR));
-            pool.killAll();
+            thread1.kill();
           });
         }
       });
