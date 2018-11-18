@@ -1,6 +1,6 @@
 import { Onp, Snakes } from './diff';
+const { parentPort, workerData } = require('worker_threads');
 
-module.exports = function([which, n, { source, offset, delta, rangeKN, rangeKM }], done) {
-  const result = Onp(source, offset, delta, rangeKN, rangeKM)(Snakes[which](n));
-  done(result);
-};
+const [which, n2, source, offset, delta, sBuffKN, sBuffKM] = workerData;
+const result = Onp(source, offset, delta, sBuffKN, sBuffKM)(Snakes[which](n2));
+parentPort.postMessage(result);

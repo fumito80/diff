@@ -4,7 +4,7 @@
   "description": "JSON Diff & Beautify",
   "main": "index.js",
   "scripts": {
-    "test": "node test/difftest",
+    "test": "node --experimental-worker test/difftest",
     "tsc_init": "tsc --init",
     "tsc": "tsc",
     "gulp": "gulp",

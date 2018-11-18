@@ -1,6 +1,6 @@
 import { unifiedResult, unifieds } from './diff';
+const { parentPort, workerData } = require('worker_threads');
 
-module.exports = function([which, source, head], done) {
-  const result = unifiedResult(unifieds[which](source), [])(head);
-  done(result);
-};
+const [which, source, head] = workerData;
+const result = unifiedResult(unifieds[which](source), [])(head);
+parentPort.postMessage(result);
