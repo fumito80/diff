@@ -274,13 +274,19 @@ export function diff(a: string | string[], b: string | string[], threshold = 100
     const headL = onp(Snakes.L(nR));
     const resultL = unifiedResult(unifieds.L(source), [])(headL);
     if (headL.x >= m && headL.y >= n) {
+      if (threshold === 0) {
+        return resultL;
+      }
       return Promise.resolve(resultL);
     }
     const result = pipe(onp, getHeadR(source, headL), unifiedResult(unifieds.R(source), resultL))(Snakes.R(nL));
+    if (threshold === 0) {
+      return result;
+    }
     return Promise.resolve(result);
   } else {
     const threads = require('threads');
-    const thread = new threads.spawn;
+    const thread = threads.spawn(function() {});
     threads.config.set({
       basepath : {
         node : __dirname,
