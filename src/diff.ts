@@ -271,31 +271,23 @@ export function diff(a: string | string[], b: string | string[], threshold = 100
   const onp = Onp(source, offset, delta, rangeKN, rangeKM);
 
   if (n < threshold) {
-    const headL = onp(Snakes.L(nR));
-    const resultL = unifiedResult(unifieds.L(source), [])(headL);
-    if (headL.x >= m && headL.y >= n) {
-      if (threshold === 0) {
-        return resultL;
-      }
-      return Promise.resolve(resultL);
-    }
-    const result = pipe(onp, getHeadR(source, headL), unifiedResult(unifieds.R(source), resultL))(Snakes.R(nL));
+    const result = pipe(onp, unifiedResult(unifieds.L(source), []))(Snakes.L(n));
     if (threshold === 0) {
       return result;
     }
     return Promise.resolve(result);
   } else {
     const threads = require('threads');
-    const thread = threads.spawn(function() {});
     threads.config.set({
       basepath : {
         node : __dirname,
         web  : 'http://myserver.local/thread-scripts'
       }
     });
+    const thread = threads.spawn(function() {});
+    thread.run('thread.js');
     return new Promise(resolve => {
-      thread.run('thOnp.js');
-      const promisHeadR = thread.send(['R', nR, { source, delta, offset, rangeKN, rangeKM }]).promise();
+      const promisHeadR = thread.send(['onp', 'R', { "n": nR, source, delta, offset, rangeKN, rangeKM }]).promise();
       const headL = onp(Snakes.L(nL));
       promisHeadR.then(headR => {
         if (headL.x >= m && headL.y >= n) {
@@ -303,12 +295,10 @@ export function diff(a: string | string[], b: string | string[], threshold = 100
           resolve(result);
           thread.kill();
         } else {
-          thread.run('thResult.js');
-          const newHeadR = getHeadR(source, headL)(headR);
-          const promiseResultR = thread.send(['R', source, newHeadR]).promise();
-          const resultL = unifiedResult(unifieds.L(source), [])(headL);
-          promiseResultR.then(resultR => {
-            resolve(([] as Ses[]).concat(...resultL, ...resultR));
+          const promiseResultL = thread.send(['result', 'L', [ source, headL ]]).promise();
+          const resultR = pipe(getHeadR(source, headL), unifiedResult(unifieds.R(source), []))(headR);
+          promiseResultL.then(resultL => {
+            resolve([...resultL, ...resultR]);
             thread.kill();
           });
         }
