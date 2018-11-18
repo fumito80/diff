@@ -23,11 +23,6 @@ const log = (...ss) => ss.forEach(s => console.log(JSON.stringify(s, null, 2)));
 type Source = {
   "a": string | string[],
   "b": string | string[]
-}
-
-type SourceInfo = {
-  "bufA": ArrayBuffer | string[],
-  "bufB": ArrayBuffer | string[],
   "m": number,
   "n": number,
   "nL": number,
@@ -35,37 +30,23 @@ type SourceInfo = {
   "flip": boolean
 };
 
-function stringToBuffer(src: string | string[]) {
-  if (Array.isArray(src)) {
-    return src;
-  }
-  return new Uint16Array([...src].map(c => c.charCodeAt(0))).buffer;
-}
-
-function bufferToString(buf: ArrayBuffer | string[]): string | string[] {
-  if (!/ArrayBuffer/.test(toString.call(buf))) {
-      return buf as string[];
-  }
-  return String.fromCharCode.apply("", new Uint16Array(buf as ArrayBuffer))
-}
-
-function init({ a = '', b = '' }: Source): SourceInfo {
+function init({ a = '', b = '' }: Source): Source {
   const [m, n] = [a.length, b.length];
-  function split({ a, b }: Source, { m, n, flip }: SourceInfo): SourceInfo {
+  function split({ a, b, m, n, flip }: Source): Source {
     const nL = Math.ceil(n / 2);
     const nR = Math.trunc(n / 2) + 1;
-    return { "bufA": stringToBuffer(a), "bufB": stringToBuffer(b), m, n, nL, nR, flip };
+    return { a, b, m, n, nL, nR, flip };
   }
   function orFlip({ a, b }: Source) {
     if (m > n) {
-      return split({ "a": b, "b": a }, { "m": n, "n": m, "flip": true } as SourceInfo);
+      return split({ "a": b, "b": a, "m": n, "n": m, "flip": true } as Source);
     }
-    return split({ a, b }, { m, n, "flip": false } as SourceInfo);
+    return split({ a, b, m, n, "flip": false } as Source);
   }
   if ((typeof a === 'string' && typeof b === 'string') || (Array.isArray(a) && Array.isArray(b))) {
-    return orFlip({ a, b });
+    return orFlip({ a, b } as Source);
   }
-  return orFlip({ a: String(a), b: String(b) });
+  return orFlip({ a: String(a), b: String(b) } as Source);
 };
 
 /**
@@ -94,9 +75,9 @@ type UnifiedResultFuns = {
   getAcc:    { ([undiffOrNull, diffOrNull, [diff], [prev, ...tail], acc]: Ses[][]): Ses[] }
 };
 
-type UnifiedResultLR = { "L": { (s: SourceInfo): UnifiedResultFuns }, "R": { (s: SourceInfo): UnifiedResultFuns } };
+type UnifiedResultLR = { "L": { (s: Source): UnifiedResultFuns }, "R": { (s: Source): UnifiedResultFuns } };
 
-function getHeadR({ m, n }: SourceInfo, headL: Path) {
+function getHeadR({ m, n }: Source, headL: Path) {
   return (headR: Path) => {
     const [newHeadR] = recurse<[Path | undefined, Path | undefined]>(
       ([, parent]) => {
@@ -134,8 +115,7 @@ export function unifiedResult({ getUndiff, getDiff, getAcc }: UnifiedResultFuns,
 }
 
 export const unifieds: UnifiedResultLR = {
-  "L": ({ bufA, bufB, flip }) => {
-    const [a, b] = [bufferToString(bufA), bufferToString(bufB)];
+  "L": ({ a, b, flip }) => {
     return {
       getUndiff: (x, undiffs): [Ses] | never[] => {
         if (undiffs > 0) {
@@ -160,8 +140,7 @@ export const unifieds: UnifiedResultLR = {
       }
     };
   },
-  "R": ({ bufA, bufB, m, n, flip }) => {
-    const [a, b] = [bufferToString(bufA), bufferToString(bufB)];
+  "R": ({ a, b, m, n, flip }) => {
     return {
       getUndiff: (x, undiffs): [Ses] | never[] => {
         if (undiffs > 0) {
@@ -205,7 +184,7 @@ type Fpk = {
 
 type Snake = { (k: number, y1: number): [number, number, number] };
 type SnakeLorR = {
-  snakeLorR: { (s: SourceInfo): Snake },
+  snakeLorR: { (s: Source): Snake },
   onpCondition: { (paths: Path[], n: number): { ([p, fp]: [number, Fpk]): boolean } }
 };
 
@@ -220,8 +199,7 @@ export const Snakes = {
           return paths[k].snaked === 0 && fp < n;
         }
       },
-      snakeLorR: ({ bufA, bufB, m, n }: SourceInfo) => {
-        const [a, b] = [bufferToString(bufA), bufferToString(bufB)];
+      snakeLorR: ({ a, b, m, n }: Source) => {
         return (k: number, y1: number) => {
           const [x, y] = recurse<[number, number]>(
             ([x, y]) => x < m && y < n && a[x] === b[y],
@@ -237,8 +215,7 @@ export const Snakes = {
       onpCondition: () => {
         return ([, { fp }]) => fp < pMax;
       },
-      snakeLorR: ({ bufA, bufB, m, n }: SourceInfo) => {
-        const [a, b] = [bufferToString(bufA), bufferToString(bufB)];
+      snakeLorR: ({ a, b, m, n }: Source) => {
         return (k: number, y1: number) => {
           const [x, y] = recurse<[number, number]>(
             ([x, y]) => x < m && y < n && a[m - x - 1] === b[n - y - 1],
@@ -262,13 +239,12 @@ function snakeOnp(offset: number, fp: Fpk[], paths: Path[], snake: Snake) {
   }
 }
 
-export function Onp(source: SourceInfo, offset: number, delta: number, bufRangeKN: ArrayBuffer, buRangeKM: ArrayBuffer) {
+export function Onp(source: Source, offset: number, delta: number, rangeKN: number[], rangeKM: number[]) {
   return ({ snakeLorR, onpCondition }: SnakeLorR): Path => {
     const { m, n } = source;
     const paths: Path[] = [];
     const fpk: Fpk[] = new Array(m + n + 3).fill({ "fp": - 1, "k": - 1 });
     const snake = snakeOnp(offset, fpk, paths, snakeLorR(source));
-    const [rangeKN, rangeKM] = [new Int32Array(bufRangeKN), new Int32Array(buRangeKM)];
     const [, { k }] = recurse<[number, Fpk]>(
       onpCondition(paths, n),
       ([p]) => {
@@ -286,26 +262,18 @@ export function Onp(source: SourceInfo, offset: number, delta: number, bufRangeK
  */
 
 export function diff(a: string | string[], b: string | string[], threshold = 100000) {
-  const source = init({ a, b });
+  const source = init({ a, b } as Source);
   const { m, n, nL, nR } = source;
   const offset = m + 1;
   const delta = n - m;
 
-  const sBuffKN = new Int32Array([...Array(n)].map((_, i) => - (n - i) + delta)).buffer;
-  const sBuffKM = new Int32Array([...Array(m + 1)].map((_, i) => m - i + delta)).buffer;
+  const rangeKN = [...Array(n)].map((_, i) => - (n - i) + delta);
+  const rangeKM = [...Array(m + 1)].map((_, i) => m - i + delta);
 
-  const onp = Onp(source, offset, delta, sBuffKN, sBuffKM);
+  const onp = Onp(source, offset, delta, rangeKN, rangeKM);
 
   if (n < threshold) {
-    const headL = onp(Snakes.L(nR));
-    const resultL = unifiedResult(unifieds.L(source), [])(headL);
-    if (headL.x >= m && headL.y >= n) {
-      if (threshold === 0) {
-        return resultL;
-      }
-      return Promise.resolve(resultL);
-    }
-    const result = pipe(onp, getHeadR(source, headL), unifiedResult(unifieds.R(source), resultL))(Snakes.R(nL));
+    const result = pipe(onp, unifiedResult(unifieds.L(source), []))(Snakes.L(n));
     if (threshold === 0) {
       return result;
     }
@@ -313,7 +281,7 @@ export function diff(a: string | string[], b: string | string[], threshold = 100
   } else {
     const { Worker } = require('worker_threads');
     const workerHeadR = new Worker(__dirname + '/thOnp.js', {
-      workerData: ['R', nR, source, offset, delta, sBuffKN, sBuffKM]
+      workerData: ['R', nR, source, offset, delta, rangeKN, rangeKM]
     });
     const headL = onp(Snakes.L(nL));
     return new Promise(resolve => {
@@ -322,11 +290,10 @@ export function diff(a: string | string[], b: string | string[], threshold = 100
           const result = unifiedResult(unifieds.L(source), [])(headL);
           resolve(result);
         } else {
-          const newHeadR = getHeadR(source, headL)(headR);
-          const workerResultR = new Worker(__dirname + '/thResult.js', { workerData: ['R', source, newHeadR] });
-          const resultL = unifiedResult(unifieds.L(source), [])(headL);
-          workerResultR.on('message', resultR => {
-            resolve(([] as Ses[]).concat(...resultL, ...resultR));
+          const workerResultL = new Worker(__dirname + '/thResult.js', { workerData: ['L', source, headL] });
+          const resultR = pipe(getHeadR(source, headL), unifiedResult(unifieds.L(source), []))(headR);
+          workerResultL.on('message', resultL => {
+            resolve([...resultL, ...resultR]);
           });
         }
       });
