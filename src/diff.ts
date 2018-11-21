@@ -13,7 +13,8 @@ function recurse<T>(cbCondition: { (a: T): boolean }, cbRecurse: { (a: T): T }) 
   }
   return run;
 }
-const pipe = (fn, ...fns) => (arg) => fns.reduce((acc, fn2) => fn2(acc), fn(arg));
+const pipe = <T>(fn, ...fns) => (arg): T => fns.reduce((acc, fn2) => fn2(acc), fn(arg));
+const reduce = <T>(f) => (a: any[]) => b => a.reduce<T>(f, b);
 const log = (...ss) => ss.forEach(s => console.log(JSON.stringify(s, null, 2)));
 
 /**
@@ -175,7 +176,7 @@ export const unifieds = {
  * Diff ONP
  */
 
-type Fpk = {
+type Fp = {
   "fp": number,
   "k": number
 };
@@ -183,18 +184,18 @@ type Fpk = {
 type Snake = { (k: number, y1: number): [number, number, number] };
 type SnakeLorR = {
   snakeLorR: { (s: Source): Snake },
-  onpCondition: { (paths: Path[], n: number): { ([p, fp]: [number, Fpk]): boolean } }
+  onpCondition: { (delta: number, offset: number, n: number): { ([p, paths, fp]: [number, Path[], Fp[]]): boolean } }
 };
 
 export const Snakes = {
   "L": (pMax: number): SnakeLorR => {
     return {
-      onpCondition: (paths: Path[], n: number) => {
-        return ([, { fp, k }]) => {
-          if (fp < pMax) {
+      onpCondition: (delta: number, offset: number, n: number) => {
+        return ([k, paths, fp]: [number, Path[], Fp[]]) => {
+          if (fp[delta + offset].fp < pMax) {
             return true;
           }
-          return paths[k].snaked === 0 && fp < n;
+          return paths[k].snaked === 0 && fp[delta + offset].fp < n;
         }
       },
       snakeLorR: ({ a, b, m, n }: Source) => {
@@ -210,8 +211,8 @@ export const Snakes = {
   },
   "R": (pMax: number): SnakeLorR => {
     return {
-      onpCondition: () => {
-        return ([, { fp }]) => fp < pMax;
+      onpCondition: (delta: number, offset: number) => {
+        return ([,, fp]) => fp[delta + offset].fp < pMax;
       },
       snakeLorR: ({ a, b, m, n }: Source) => {
         return (k: number, y1: number) => {
@@ -226,32 +227,32 @@ export const Snakes = {
   }
 }
 
-function snakeOnp(offset: number, fp: Fpk[], paths: Path[], snake: Snake) {
-  return (k: number): void => {
+function snakeOnp(offset: number, snake: Snake) {
+  return ([paths, fp]: [Path[], Fp[]], k: number): [Path[], Fp[]] => {
     const [p, pp] = [fp[k - 1 + offset].fp + 1, fp[k + 1 + offset].fp];
     const [y1, dir] = p > pp ? [p, -1] : [pp, 1];
     const [x, y, fpValue] = snake(k, y1);
     fp[k + offset] = { "fp": fpValue, "k": paths.length };
     const parent = paths[fp[k + dir + offset].k];
     paths.push({ x, y, snaked: y - y1, parent });
+    return [paths, fp];
   }
 }
 
-export function Onp(source: Source, offset: number, delta: number, rangeKN: number[], rangeKM: number[]) {
+export function Onp(source: Source, delta: number, offset: number, rangeKN: number[], rangeKM: number[]) {
   return ({ snakeLorR, onpCondition }: SnakeLorR): Path => {
     const { m, n } = source;
-    const paths: Path[] = [];
-    const fpk: Fpk[] = new Array(m + n + 3).fill({ "fp": - 1, "k": - 1 });
-    const snake = snakeOnp(offset, fpk, paths, snakeLorR(source));
-    const [, { k }] = recurse<[number, Fpk]>(
-      onpCondition(paths, n),
-      ([p]) => {
-        rangeKN.slice(n - p).forEach(snake);
-        rangeKM.slice(m - p + delta).forEach(snake);
-        return [p + 1, fpk[delta + offset]];
-      }
-    )([delta, { "fp": - 1, "k": - 1 }]);
-    return paths[k];
+    const snake = snakeOnp(offset, snakeLorR(source));
+    const condition = onpCondition(delta, offset, n);
+    const [, paths, fp] = recurse<[number, Path[], Fp[]]>(
+      condition,
+      ([p, paths, fp]) => pipe<[number, Path[], Fp[]]>(
+        reduce<[Path[], Fp[]]>(snake)(rangeKN.slice(n - p)),
+        reduce<[Path[], Fp[]]>(snake)(rangeKM.slice(m - p + delta)),
+        result => [p + 1, ...result]
+      )([paths, fp])
+    )([delta, [], new Array(m + n + 3).fill({ "fp": - 1, "k": - 1 })]);
+    return paths[fp[delta + offset].k];
   }
 }
 
@@ -265,10 +266,10 @@ export function diff(a: string | string[], b: string | string[], threshold = 100
   const offset = m + 1;
   const delta = n - m;
 
-  const rangeKN = [...Array(n)].map((_, i) => - (n - i) + delta);
-  const rangeKM = [...Array(m + 1)].map((_, i) => m - i + delta);
+  const rangeKN = [...Array(n)].map((_, i) => delta - (n - i));
+  const rangeKM = [...Array(m + 1)].map((_, i) => delta + (m - i));
 
-  const onp = Onp(source, offset, delta, rangeKN, rangeKM);
+  const onp = Onp(source, delta, offset, rangeKN, rangeKM);
 
   if (n < threshold) {
     const result = pipe(onp, unifiedResult(unifieds.L(source), []))(Snakes.L(n));
@@ -296,7 +297,7 @@ export function diff(a: string | string[], b: string | string[], threshold = 100
           thread.kill();
         } else {
           const promiseResultL = thread.send(['result', 'L', [ source, headL ]]).promise();
-          const resultR = pipe(getHeadR(source, headL), unifiedResult(unifieds.R(source), []))(headR);
+          const resultR = pipe<Ses[]>(getHeadR(source, headL), unifiedResult(unifieds.R(source), []))(headR);
           promiseResultL.then(resultL => {
             resolve([...resultL, ...resultR]);
             thread.kill();

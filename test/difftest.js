@@ -26,19 +26,19 @@ let src2 = [
 ];
 
 src1 = 'XABCDAXZV';
-src2 = 'XBFEABDBYZZ';
+src2 = 'XBFEABDBY';
 
-src1 = 'AAAAAAiiA';
-src2 = 'AAAAAATTA';
+// src1 = 'AAAAAAiiA';
+// src2 = 'AAAAAATTA';
 
-src1 = 'AAAiiAAA';
-src2 = 'AAATTAAA';
+// src1 = 'AAAiiAAA';
+// src2 = 'AAATTAAA';
 
-src1 = 'Determines the height of the cursor. Default is 1, meaning it spans the whole height of the line. For some fonts (and by some tastes) a smaller height (for exampBBle 0.85), which causes the cursor to not reach all the way to the bottom of the line, looks better';
-src2 = 'Determines the height of the cursor. Default is 1, meaning it spans the whole height of the line. For some fonts (and by some tastes) a smaller height (for exampAAle 0.85), which causes the cursor to not reach all the way to the bottom of the line, looks better';
+// src1 = 'Determines the height of the cursor. Default is 1, meaning it spans the whole height of the line. For some fonts (and by some tastes) a smaller height (for exampBBle 0.85), which causes the cursor to not reach all the way to the bottom of the line, looks better';
+// src2 = 'Determines the height of the cursor. Default is 1, meaning it spans the whole height of the line. For some fonts (and by some tastes) a smaller height (for exampAAle 0.85), which causes the cursor to not reach all the way to the bottom of the line, looks better';
 
-src1 = 'Determines the height of the FFcursor. Default is 1, meaning it spans the whole height of the line. For some fonts (and by some tastes) a smaller height (for example 0.85), which causes the cursor to not reach all the way to the bottom of the line, looks better';
-src2 = 'Determines the height of the CCCcursor. Default is 1, meaning it spans the whole height of the line. For some fonts (and by some tastes) a smaller height (for example 0.85), which causes the cursor to not reach all the way to the bottom of the line, looks better';
+// src1 = 'Determines the height of the FFcursor. Default is 1, meaning it spans the whole height of the line. For some fonts (and by some tastes) a smaller height (for example 0.85), which causes the cursor to not reach all the way to the bottom of the line, looks better';
+// src2 = 'Determines the height of the CCCcursor. Default is 1, meaning it spans the whole height of the line. For some fonts (and by some tastes) a smaller height (for example 0.85), which causes the cursor to not reach all the way to the bottom of the line, looks better';
 
 src1 = fs.readFileSync(path.join(__dirname, 'txt-codemirror-man1.txt')).toLocaleString();
 src2 = fs.readFileSync(path.join(__dirname, 'txt-codemirror-man2.txt')).toLocaleString();
@@ -56,7 +56,7 @@ console.log('end: ' + end + ', lap: ' + (end - start));
 
 function mydiff() {
   console.log('mydiff();');
-  let promise = diff.diff(src1 || process.argv[2], src2 || process.argv[3], 60000);
+  let promise = diff.diff(src1 || process.argv[2], src2 || process.argv[3], 100000);
   // console.log(ses);
 
   promise.then(ses => {
